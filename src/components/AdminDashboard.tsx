@@ -188,7 +188,7 @@ export default function AdminDashboard() {
           label="Toplam Sipariş"
           value={stats.totalOrders.toString()}
           color="info"
-          sub="Ortalama: {avg} ₺".replace('{avg}', stats.avgOrderValue.toString())
+          sub={`Ortalama: ${stats.avgOrderValue} ₺`}
         />
         <SummaryCard
           icon={<Utensils className="w-5 h-5" />}
