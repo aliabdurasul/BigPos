@@ -110,7 +110,7 @@ export default function RestoranAdmin() {
         </div>
 
         <div className="flex-1 p-6 overflow-y-auto">
-          {activeTab === 'dashboard' && <AdminDashboard />}
+          {activeTab === 'raporlar' && <AdminDashboard />}
 
           {activeTab === 'menu' && (
             <div>
