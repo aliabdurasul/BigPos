@@ -111,6 +111,8 @@ export default function RestoranAdmin() {
         </div>
 
         <div className="flex-1 p-6 overflow-y-auto">
+          {activeTab === 'dashboard' && <AdminDashboard />}
+
           {activeTab === 'menu' && (
             <div>
               <h2 className="text-lg font-black mb-4">Menü Yönetimi</h2>
