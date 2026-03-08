@@ -1,25 +1,24 @@
 import { useState, useMemo } from 'react';
 import { usePOS } from '@/context/POSContext';
-import { ArrowLeft, Plus, Trash2, UtensilsCrossed, Grid3X3, Tag, Users, Store, BarChart3, Edit3, LayoutDashboard } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, UtensilsCrossed, Grid3X3, Tag, Users, Store, BarChart3 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import AdminDashboard from '@/components/AdminDashboard';
 
-type Tab = 'dashboard' | 'menu' | 'kategori' | 'masa' | 'personel' | 'raporlar';
+type Tab = 'raporlar' | 'menu' | 'kategori' | 'masa' | 'personel';
 
 const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
+  { id: 'raporlar', label: 'Raporlar', icon: <BarChart3 className="w-5 h-5" /> },
   { id: 'menu', label: 'Menü', icon: <UtensilsCrossed className="w-5 h-5" /> },
   { id: 'kategori', label: 'Kategoriler', icon: <Tag className="w-5 h-5" /> },
   { id: 'masa', label: 'Masalar', icon: <Grid3X3 className="w-5 h-5" /> },
   { id: 'personel', label: 'Personel', icon: <Users className="w-5 h-5" /> },
-  { id: 'raporlar', label: 'Raporlar', icon: <BarChart3 className="w-5 h-5" /> },
 ];
 
 export default function RestoranAdmin() {
   const { categories, setCategories, menuItems, setMenuItems, tables, setTables, floors, orders } = usePOS();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  const [activeTab, setActiveTab] = useState<Tab>('raporlar');
   const [newItemName, setNewItemName] = useState('');
   const [newItemPrice, setNewItemPrice] = useState('');
   const [newItemCategory, setNewItemCategory] = useState(categories[0]?.id || '');
@@ -29,31 +28,7 @@ export default function RestoranAdmin() {
   const [newTableName, setNewTableName] = useState('');
   const [newTableFloor, setNewTableFloor] = useState(floors[0]);
 
-  // Report calculations
-  const reportData = useMemo(() => {
-    const totalSales = orders.reduce((sum, o) => sum + o.total, 0);
-    const totalOrders = orders.length;
-    const cashSales = orders.reduce((sum, o) => {
-      return sum + (o.payments || []).filter(p => p.method === 'nakit').reduce((s, p) => s + p.amount, 0);
-    }, 0);
-    const cardSales = orders.reduce((sum, o) => {
-      return sum + (o.payments || []).filter(p => p.method === 'kredi_karti').reduce((s, p) => s + p.amount, 0);
-    }, 0);
 
-    // Top selling products
-    const productCounts: Record<string, { name: string; count: number; revenue: number }> = {};
-    orders.forEach(o => {
-      o.items.forEach(item => {
-        const key = item.menuItem.id;
-        if (!productCounts[key]) productCounts[key] = { name: item.menuItem.name, count: 0, revenue: 0 };
-        productCounts[key].count += item.quantity;
-        productCounts[key].revenue += item.menuItem.price * item.quantity;
-      });
-    });
-    const topProducts = Object.values(productCounts).sort((a, b) => b.count - a.count).slice(0, 5);
-
-    return { totalSales, totalOrders, cashSales, cardSales, topProducts };
-  }, [orders]);
 
   const addMenuItem = () => {
     if (!newItemName || !newItemPrice) return;
@@ -111,7 +86,7 @@ export default function RestoranAdmin() {
         </div>
 
         <div className="flex-1 p-6 overflow-y-auto">
-          {activeTab === 'dashboard' && <AdminDashboard />}
+          {activeTab === 'raporlar' && <AdminDashboard />}
 
           {activeTab === 'menu' && (
             <div>
@@ -216,7 +191,6 @@ export default function RestoranAdmin() {
             </div>
           )}
 
-          {activeTab === 'raporlar' && <AdminDashboard />}
         </div>
       </div>
     </div>
