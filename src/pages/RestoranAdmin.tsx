@@ -28,31 +28,7 @@ export default function RestoranAdmin() {
   const [newTableName, setNewTableName] = useState('');
   const [newTableFloor, setNewTableFloor] = useState(floors[0]);
 
-  // Report calculations
-  const reportData = useMemo(() => {
-    const totalSales = orders.reduce((sum, o) => sum + o.total, 0);
-    const totalOrders = orders.length;
-    const cashSales = orders.reduce((sum, o) => {
-      return sum + (o.payments || []).filter(p => p.method === 'nakit').reduce((s, p) => s + p.amount, 0);
-    }, 0);
-    const cardSales = orders.reduce((sum, o) => {
-      return sum + (o.payments || []).filter(p => p.method === 'kredi_karti').reduce((s, p) => s + p.amount, 0);
-    }, 0);
 
-    // Top selling products
-    const productCounts: Record<string, { name: string; count: number; revenue: number }> = {};
-    orders.forEach(o => {
-      o.items.forEach(item => {
-        const key = item.menuItem.id;
-        if (!productCounts[key]) productCounts[key] = { name: item.menuItem.name, count: 0, revenue: 0 };
-        productCounts[key].count += item.quantity;
-        productCounts[key].revenue += item.menuItem.price * item.quantity;
-      });
-    });
-    const topProducts = Object.values(productCounts).sort((a, b) => b.count - a.count).slice(0, 5);
-
-    return { totalSales, totalOrders, cashSales, cardSales, topProducts };
-  }, [orders]);
 
   const addMenuItem = () => {
     if (!newItemName || !newItemPrice) return;
