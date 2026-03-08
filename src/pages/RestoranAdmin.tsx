@@ -18,7 +18,7 @@ const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
 export default function RestoranAdmin() {
   const { categories, setCategories, menuItems, setMenuItems, tables, setTables, floors, orders } = usePOS();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  const [activeTab, setActiveTab] = useState<Tab>('raporlar');
   const [newItemName, setNewItemName] = useState('');
   const [newItemPrice, setNewItemPrice] = useState('');
   const [newItemCategory, setNewItemCategory] = useState(categories[0]?.id || '');
