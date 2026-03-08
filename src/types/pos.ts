@@ -5,9 +5,11 @@ export type TableStatus = 'bos' | 'dolu' | 'odeme_bekliyor';
 export interface MenuItem {
   id: string;
   name: string;
+  description?: string;
   price: number;
   categoryId: string;
   hasModifiers?: boolean;
+  image?: string;
 }
 
 export interface Category {
@@ -22,6 +24,7 @@ export interface Table {
   status: TableStatus;
   floor: string;
   currentTotal?: number;
+  openedAt?: Date;
 }
 
 export interface ModifierGroup {
@@ -49,11 +52,20 @@ export interface OrderItem {
   quantity: number;
   modifiers: OrderItemModifier[];
   note?: string;
+  sentToKitchen?: boolean;
 }
 
 export type OrderStatus = 'yeni' | 'hazirlaniyor' | 'hazir';
 
 export type PaymentMethod = 'nakit' | 'kredi_karti' | 'bolunmus';
+
+export interface Payment {
+  id: string;
+  orderId: string;
+  amount: number;
+  method: PaymentMethod;
+  createdAt: Date;
+}
 
 export interface Order {
   id: string;
@@ -63,6 +75,8 @@ export interface Order {
   status: OrderStatus;
   createdAt: Date;
   total: number;
+  payments?: Payment[];
+  prepayment?: number;
 }
 
 export interface Restaurant {
