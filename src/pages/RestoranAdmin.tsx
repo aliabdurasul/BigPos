@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { usePOS } from '@/context/POSContext';
-import { ArrowLeft, Plus, Trash2, UtensilsCrossed, Grid3X3, Tag, Users, Edit2, Store } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, UtensilsCrossed, Grid3X3, Tag, Users, Store } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
