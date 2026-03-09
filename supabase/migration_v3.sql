@@ -1,6 +1,7 @@
 -- ============================================
 -- LEZZET-I ALA POS - DATABASE SCHEMA V3
 -- Two-Level Authentication System
+-- IDEMPOTENT: Safe to re-run multiple times
 -- Run AFTER migration_v2.sql in Supabase SQL Editor
 -- ============================================
 
@@ -26,6 +27,9 @@ create table if not exists platform_users (
 -- ============================================
 -- 3. RPC: CREATE PLATFORM USER (hashes password)
 -- ============================================
+-- Drop first to avoid parameter name conflicts on re-run
+drop function if exists create_platform_user(text, text, text, text, uuid);
+
 create or replace function create_platform_user(
   p_email text,
   p_password text,
@@ -40,12 +44,25 @@ begin
   values (lower(trim(p_email)), crypt(p_password, gen_salt('bf')), p_name, p_role, p_restaurant_id)
   returning id into new_id;
   return new_id;
+exception when unique_violation then
+  -- If user already exists, update the password and return existing id
+  update platform_users
+  set password_hash = crypt(p_password, gen_salt('bf')),
+      name = p_name,
+      role = p_role,
+      restaurant_id = coalesce(p_restaurant_id, restaurant_id)
+  where email = lower(trim(p_email))
+  returning id into new_id;
+  return new_id;
 end;
 $$ language plpgsql security definer;
 
 -- ============================================
 -- 4. RPC: VERIFY PLATFORM LOGIN
 -- ============================================
+-- Drop first to avoid parameter name conflicts on re-run
+drop function if exists verify_platform_login(text, text);
+
 create or replace function verify_platform_login(
   p_email text,
   p_password text
@@ -73,26 +90,38 @@ end;
 $$ language plpgsql security definer;
 
 -- ============================================
--- 5. SEED SUPER ADMIN
+-- 5. SEED SUPER ADMIN (idempotent via ON CONFLICT)
 -- ============================================
-select create_platform_user(
+insert into platform_users (email, password_hash, name, role, restaurant_id)
+values (
   'superadmin@mail.com',
-  '12345',
+  crypt('12345', gen_salt('bf')),
   'Super Admin',
-  'super_admin'
-);
+  'super_admin',
+  null
+)
+on conflict (email) do update set
+  password_hash = crypt('12345', gen_salt('bf')),
+  name = 'Super Admin',
+  role = 'super_admin';
 
 -- ============================================
 -- 6. MIGRATE EXISTING RESTORAN_ADMIN STAFF → PLATFORM_USERS
 -- ============================================
--- Create a platform_user for the default restaurant owner
-select create_platform_user(
+-- Create a platform_user for the default restaurant owner (idempotent)
+insert into platform_users (email, password_hash, name, role, restaurant_id)
+values (
   'admin@lezzet.com',
-  '1234',
+  crypt('1234', gen_salt('bf')),
   'Lezzet Admin',
   'restoran_admin',
   '00000000-0000-0000-0000-000000000001'
-);
+)
+on conflict (email) do update set
+  password_hash = crypt('1234', gen_salt('bf')),
+  name = 'Lezzet Admin',
+  role = 'restoran_admin',
+  restaurant_id = '00000000-0000-0000-0000-000000000001';
 
 -- Remove restoran_admin entries from staff table (they now live in platform_users)
 delete from staff where role = 'restoran_admin';
@@ -109,7 +138,8 @@ alter table staff add constraint staff_role_check check (role in ('garson', 'mut
 -- ============================================
 alter table platform_users enable row level security;
 
--- Block direct table reads — all access goes through security definer RPCs
+-- Drop existing policy if present, then recreate
+drop policy if exists "Block direct access to platform_users" on platform_users;
 create policy "Block direct access to platform_users"
   on platform_users for all using (false);
 
@@ -118,3 +148,10 @@ create policy "Block direct access to platform_users"
 -- ============================================
 create index if not exists idx_platform_users_email on platform_users(email);
 create index if not exists idx_staff_pin_restaurant on staff(pin, restaurant_id);
+
+-- ============================================
+-- 10. VERIFICATION (check seed data exists)
+-- ============================================
+-- Run this after the migration to verify:
+-- select * from verify_platform_login('superadmin@mail.com', '12345');
+-- Should return 1 row with role = 'super_admin'
