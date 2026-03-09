@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { usePOS } from '@/context/POSContext';
 import { OrderItem, Table, MenuItem, OrderItemModifier, Payment } from '@/types/pos';
-import { ArrowLeft, Minus, Plus, Send, Trash2, X, CreditCard, Banknote, Search, SplitSquareHorizontal, Clock, Edit3, MessageSquare, AlertTriangle, Users, Receipt } from 'lucide-react';
+import { ArrowLeft, Minus, Plus, Send, Trash2, X, CreditCard, Banknote, Search, SplitSquareHorizontal, Clock, Edit3, MessageSquare, AlertTriangle, Users, Receipt, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -15,7 +15,7 @@ function formatDuration(openedAt?: Date) {
 }
 
 export default function GarsonPOS() {
-  const { tables, categories, menuItems, addOrder, getTableOrders, setTableStatus, setTableTotal, openTable, modifierGroups, floors, addPayment, orders, removeOrder, updateOrder } = usePOS();
+  const { tables, categories, menuItems, addOrder, getTableOrders, setTableStatus, setTableTotal, openTable, modifierGroups, floors, addPayment, orders, removeOrder, updateOrder, productModifierMap, logout, staffName } = usePOS();
   const navigate = useNavigate();
   const [selectedTable, setSelectedTable] = useState<Table | null>(null);
   const [selectedCategory, setSelectedCategory] = useState(categories[0]?.id || '');
@@ -316,6 +316,7 @@ export default function GarsonPOS() {
           <ArrowLeft className="w-5 h-5" />
         </button>
         <h1 className="text-lg font-bold">Garson POS</h1>
+        {staffName && <span className="text-xs text-muted-foreground font-medium ml-1">({staffName})</span>}
         {selectedTable && (
           <div className="ml-auto flex items-center gap-2">
             {selectedTable.openedAt && (
@@ -326,6 +327,11 @@ export default function GarsonPOS() {
             <span className="px-3 py-1 rounded-lg bg-primary/10 text-primary font-bold text-sm">{selectedTable.name}</span>
           </div>
         )}
+        {!selectedTable && (
+          <button onClick={() => { logout(); navigate('/'); }} className="ml-auto p-2 rounded-lg hover:bg-muted pos-btn" title="Cikis">
+            <LogOut className="w-4 h-4" />
+          </button>
+        )}
       </header>
 
       <div className="flex flex-1 min-h-0">
@@ -333,7 +339,7 @@ export default function GarsonPOS() {
         <div className="w-80 shrink-0 border-r bg-card flex flex-col">
           <div className="p-3 border-b">
             <h2 className="font-bold text-base">
-              {selectedTable ? `📋 ${selectedTable.name}` : 'Masa Seçin'}
+              {selectedTable ? `${selectedTable.name}` : 'Masa Secin'}
             </h2>
             {totalPaid > 0 && (
               <p className="text-xs text-pos-success font-semibold mt-0.5">Ödenen: {totalPaid} ₺</p>
@@ -367,7 +373,7 @@ export default function GarsonPOS() {
                           </div>
                         )}
                         {item.note && (
-                          <p className="text-[11px] text-pos-warning font-medium mt-0.5 italic">📝 {item.note}</p>
+                          <p className="text-[11px] text-pos-warning font-medium mt-0.5 italic">Not: {item.note}</p>
                         )}
                         {editNoteId === item.id ? (
                           <div className="flex gap-1 mt-1">
@@ -468,7 +474,10 @@ export default function GarsonPOS() {
                 ))}
               </div>
               <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 flex-1 content-start overflow-y-auto">
-                {floorTables.map(t => (
+                {floorTables.map(t => {
+                  const tOrders = orders.filter(o => o.tableId === t.id);
+                  const tPrepay = tOrders.reduce((sum, o) => sum + (o.prepayment || 0), 0);
+                  return (
                   <button
                     key={t.id}
                     onClick={() => handleSelectTable(t)}
@@ -478,7 +487,10 @@ export default function GarsonPOS() {
                     <span className="text-2xl font-black text-foreground">{t.name.replace('Masa ', '')}</span>
                     <span className="text-xs text-muted-foreground mt-1">{t.name}</span>
                     {t.currentTotal && t.currentTotal > 0 && (
-                      <span className="text-xs font-bold text-primary mt-1">{t.currentTotal} ₺</span>
+                      <span className="text-xs font-bold text-primary mt-1">{t.currentTotal} TL</span>
+                    )}
+                    {tPrepay > 0 && (
+                      <span className="text-[10px] font-bold text-pos-success mt-0.5">On odeme: {tPrepay} TL</span>
                     )}
                     {t.openedAt && t.status !== 'bos' && (
                       <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground mt-0.5">
@@ -486,7 +498,8 @@ export default function GarsonPOS() {
                       </span>
                     )}
                   </button>
-                ))}
+                  );
+                })}
               </div>
               <div className="flex gap-4 mt-3 justify-center text-xs text-muted-foreground">
                 <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-pos-success" /> Boş</span>
@@ -573,7 +586,13 @@ export default function GarsonPOS() {
               <p className="text-primary font-bold">{pendingItem.price} ₺</p>
             </div>
             <div className="p-4 space-y-4 max-h-[50vh] overflow-y-auto">
-              {modifierGroups.map(group => (
+              {modifierGroups
+                .filter(group => {
+                  // Show only modifier groups linked to this product, or all if no mapping exists
+                  const linkedGroups = productModifierMap.get(pendingItem.id);
+                  return !linkedGroups || linkedGroups.length === 0 || linkedGroups.includes(group.id);
+                })
+                .map(group => (
                 <div key={group.id}>
                   <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">{group.name}</h4>
                   <div className="space-y-1.5">

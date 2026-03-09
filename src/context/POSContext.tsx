@@ -3,7 +3,33 @@ import { supabase } from '@/lib/supabase';
 import {
   Category, MenuItem, Table, Order, OrderItem, OrderStatus,
   UserRole, ModifierGroup, TableStatus, Payment, ModifierOption,
+  Staff, DailyClosure, Restaurant,
 } from '@/types/pos';
+
+// ─── Session Persistence ───────────────────────────
+const SESSION_KEY = 'pos_session';
+interface SessionData {
+  role: UserRole | null;
+  restaurantId: string | null;
+  staffId: string | null;
+  staffName: string | null;
+}
+function loadSession(): SessionData {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return { role: null, restaurantId: null, staffId: null, staffName: null };
+}
+function saveSession(data: SessionData) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify(data));
+}
+function clearSession() {
+  localStorage.removeItem(SESSION_KEY);
+}
+
+// Default restaurant for single-tenant setup
+const DEFAULT_RESTAURANT_ID = '00000000-0000-0000-0000-000000000001';
 
 // ─── Context Type ──────────────────────────────────
 
@@ -11,6 +37,10 @@ interface POSContextType {
   role: UserRole | null;
   setRole: (role: UserRole | null) => void;
   loading: boolean;
+  restaurantId: string;
+  setRestaurantId: (id: string) => void;
+  staffId: string | null;
+  staffName: string | null;
   categories: Category[];
   setCategories: React.Dispatch<React.SetStateAction<Category[]>>;
   menuItems: MenuItem[];
@@ -29,12 +59,29 @@ interface POSContextType {
   addPayment: (orderId: string, payment: Payment) => void;
   modifierGroups: ModifierGroup[];
   floors: string[];
+  // Staff
+  staff: Staff[];
+  loginWithPin: (pin: string) => Promise<Staff | null>;
+  addStaff: (s: Omit<Staff, 'id'>) => void;
+  removeStaff: (id: string) => void;
+  updateStaff: (id: string, updates: Partial<Staff>) => void;
+  logout: () => void;
+  // Admin CRUD
   addCategory: (cat: Omit<Category, 'id'>) => void;
   removeCategory: (id: string) => void;
   addMenuItem: (item: Omit<MenuItem, 'id'>) => void;
+  updateMenuItem: (id: string, updates: Partial<MenuItem>) => void;
   removeMenuItem: (id: string) => void;
   addTable: (table: Omit<Table, 'id'>) => void;
   removeTable: (id: string) => void;
+  // Floor CRUD
+  addFloor: (name: string) => void;
+  removeFloor: (name: string) => void;
+  // Daily closure
+  closeDailyReport: (data: Omit<DailyClosure, 'id'>) => Promise<void>;
+  // Product-modifier mapping
+  productModifierMap: Map<string, string[]>;
+  setProductModifiers: (menuItemId: string, groupIds: string[]) => void;
 }
 
 const POSContext = createContext<POSContextType | null>(null);
@@ -42,7 +89,7 @@ const POSContext = createContext<POSContextType | null>(null);
 // ─── Supabase Row → TS Type Mappers ───────────────
 
 function mapCategory(row: Record<string, unknown>): Category {
-  return { id: row.id as string, name: row.name as string, icon: (row.icon as string) || undefined };
+  return { id: row.id as string, name: row.name as string, icon: (row.icon as string) || undefined, restaurantId: (row.restaurant_id as string) || undefined };
 }
 
 function mapMenuItem(row: Record<string, unknown>): MenuItem {
@@ -54,6 +101,12 @@ function mapMenuItem(row: Record<string, unknown>): MenuItem {
     categoryId: (row.category_id as string) || '',
     hasModifiers: (row.has_modifiers as boolean) || false,
     image: (row.image as string) || undefined,
+    portionInfo: (row.portion_info as string) || undefined,
+    allergenInfo: (row.allergen_info as string) || undefined,
+    spiceLevel: row.spice_level != null ? Number(row.spice_level) : undefined,
+    ingredients: (row.ingredients as string[]) || undefined,
+    kitchenNote: (row.kitchen_note as string) || undefined,
+    restaurantId: (row.restaurant_id as string) || undefined,
   };
 }
 
@@ -100,6 +153,7 @@ function mapModifierGroup(row: Record<string, unknown>): ModifierGroup {
     id: row.id as string,
     name: row.name as string,
     type: row.type as 'checkbox' | 'radio',
+    restaurantId: (row.restaurant_id as string) || undefined,
     options: opts
       .sort((a, b) => ((a.sort_order as number) || 0) - ((b.sort_order as number) || 0))
       .map((o): ModifierOption => ({
@@ -110,17 +164,44 @@ function mapModifierGroup(row: Record<string, unknown>): ModifierGroup {
   };
 }
 
+function mapStaff(row: Record<string, unknown>): Staff {
+  return {
+    id: row.id as string,
+    restaurantId: row.restaurant_id as string,
+    name: row.name as string,
+    role: row.role as UserRole,
+    pin: row.pin as string,
+    active: row.active as boolean,
+  };
+}
+
 // ─── Provider ─────────────────────────────────────
 
 export function POSProvider({ children }: { children: React.ReactNode }) {
+  const session = loadSession();
   const [loading, setLoading] = useState(true);
-  const [role, setRole] = useState<UserRole | null>(null);
+  const [role, setRoleState] = useState<UserRole | null>(session.role);
+  const [restaurantId, setRestaurantIdState] = useState<string>(session.restaurantId || DEFAULT_RESTAURANT_ID);
+  const [staffId, setStaffId] = useState<string | null>(session.staffId);
+  const [staffName, setStaffName] = useState<string | null>(session.staffName);
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [modifierGroups, setModifierGroups] = useState<ModifierGroup[]>([]);
   const [floors, setFloors] = useState<string[]>([]);
+  const [staff, setStaff] = useState<Staff[]>([]);
+  const [productModifierMap, setProductModifierMap] = useState<Map<string, string[]>>(new Map());
+
+  const setRole = useCallback((r: UserRole | null) => {
+    setRoleState(r);
+    saveSession({ role: r, restaurantId, staffId, staffName });
+  }, [restaurantId, staffId, staffName]);
+
+  const setRestaurantId = useCallback((id: string) => {
+    setRestaurantIdState(id);
+    saveSession({ role, restaurantId: id, staffId, staffName });
+  }, [role, staffId, staffName]);
 
   const floorMapRef = useRef(new Map<string, string>());
   const reverseFloorMapRef = useRef(new Map<string, string>());
@@ -134,6 +215,7 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
 
     async function fetchAll() {
       try {
+        const rid = restaurantId;
         const [
           { data: floorsData },
           { data: catData },
@@ -143,15 +225,19 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
           { data: ordersData },
           { data: orderItemsData },
           { data: paymentsData },
+          { data: staffData },
+          { data: pmgData },
         ] = await Promise.all([
-          supabase.from('floors').select('*').order('sort_order'),
-          supabase.from('categories').select('*').order('sort_order'),
-          supabase.from('menu_items').select('*').eq('active', true),
-          supabase.from('tables').select('*'),
-          supabase.from('modifier_groups').select('*, modifier_options(*)').order('sort_order'),
-          supabase.from('orders').select('*').neq('status', 'tamamlandi'),
+          supabase.from('floors').select('*').eq('restaurant_id', rid).order('sort_order'),
+          supabase.from('categories').select('*').eq('restaurant_id', rid).order('sort_order'),
+          supabase.from('menu_items').select('*').eq('restaurant_id', rid).eq('active', true),
+          supabase.from('tables').select('*').eq('restaurant_id', rid),
+          supabase.from('modifier_groups').select('*, modifier_options(*)').eq('restaurant_id', rid).order('sort_order'),
+          supabase.from('orders').select('*').eq('restaurant_id', rid).neq('status', 'tamamlandi'),
           supabase.from('order_items').select('*'),
           supabase.from('payments').select('*'),
+          supabase.from('staff').select('*').eq('restaurant_id', rid).eq('active', true),
+          supabase.from('product_modifier_groups').select('*'),
         ]);
 
         if (cancelled) return;
@@ -199,7 +285,23 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
           total: Number(o.total),
           payments: paymentsByOrder.get(o.id as string),
           prepayment: o.prepayment ? Number(o.prepayment) : undefined,
+          restaurantId: (o.restaurant_id as string) || undefined,
+          staffId: (o.staff_id as string) || undefined,
         })));
+
+        // Staff
+        setStaff((staffData || []).map(mapStaff));
+
+        // Product-modifier group mapping
+        const pmMap = new Map<string, string[]>();
+        (pmgData || []).forEach((row: Record<string, unknown>) => {
+          const itemId = row.menu_item_id as string;
+          const groupId = row.modifier_group_id as string;
+          const existing = pmMap.get(itemId) || [];
+          existing.push(groupId);
+          pmMap.set(itemId, existing);
+        });
+        setProductModifierMap(pmMap);
       } catch (err) {
         console.error('Failed to load POS data:', err);
       } finally {
@@ -209,7 +311,7 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
 
     fetchAll();
     return () => { cancelled = true; };
-  }, []);
+  }, [restaurantId]);
 
   // ─── Realtime Subscriptions ────────────────────
 
@@ -316,6 +418,8 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
         status: order.status,
         total: order.total,
         prepayment: order.prepayment || 0,
+        restaurant_id: restaurantId,
+        staff_id: staffId || null,
       });
       if (error) { console.error('addOrder error:', error); return; }
 
@@ -336,7 +440,7 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
         if (itemsErr) console.error('addOrder items error:', itemsErr);
       }
     })();
-  }, []);
+  }, [restaurantId, staffId]);
 
   const updateOrder = useCallback((orderId: string, updates: Partial<Order>) => {
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updates } : o));
@@ -422,9 +526,9 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
   const addCategory = useCallback((cat: Omit<Category, 'id'>) => {
     const id = crypto.randomUUID();
     setCategories(prev => [...prev, { ...cat, id }]);
-    supabase.from('categories').insert({ id, name: cat.name, icon: cat.icon || null })
+    supabase.from('categories').insert({ id, name: cat.name, icon: cat.icon || null, restaurant_id: restaurantId })
       .then(({ error }) => { if (error) console.error('addCategory error:', error); });
-  }, []);
+  }, [restaurantId]);
 
   const removeCategory = useCallback((id: string) => {
     setCategories(prev => prev.filter(c => c.id !== id));
@@ -438,7 +542,30 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
     supabase.from('menu_items').insert({
       id, name: item.name, description: item.description || null, price: item.price,
       category_id: item.categoryId, has_modifiers: item.hasModifiers || false, image: item.image || null,
+      portion_info: item.portionInfo || null, allergen_info: item.allergenInfo || null,
+      spice_level: item.spiceLevel || 0, ingredients: item.ingredients || [],
+      kitchen_note: item.kitchenNote || null, restaurant_id: restaurantId,
     }).then(({ error }) => { if (error) console.error('addMenuItem error:', error); });
+  }, [restaurantId]);
+
+  const updateMenuItemFn = useCallback((id: string, updates: Partial<MenuItem>) => {
+    setMenuItems(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
+    const dbUpdates: Record<string, unknown> = {};
+    if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.description !== undefined) dbUpdates.description = updates.description || null;
+    if (updates.price !== undefined) dbUpdates.price = updates.price;
+    if (updates.categoryId !== undefined) dbUpdates.category_id = updates.categoryId;
+    if (updates.hasModifiers !== undefined) dbUpdates.has_modifiers = updates.hasModifiers;
+    if (updates.image !== undefined) dbUpdates.image = updates.image || null;
+    if (updates.portionInfo !== undefined) dbUpdates.portion_info = updates.portionInfo || null;
+    if (updates.allergenInfo !== undefined) dbUpdates.allergen_info = updates.allergenInfo || null;
+    if (updates.spiceLevel !== undefined) dbUpdates.spice_level = updates.spiceLevel;
+    if (updates.ingredients !== undefined) dbUpdates.ingredients = updates.ingredients;
+    if (updates.kitchenNote !== undefined) dbUpdates.kitchen_note = updates.kitchenNote || null;
+    if (Object.keys(dbUpdates).length > 0) {
+      supabase.from('menu_items').update(dbUpdates).eq('id', id)
+        .then(({ error }) => { if (error) console.error('updateMenuItem error:', error); });
+    }
   }, []);
 
   const removeMenuItemFn = useCallback((id: string) => {
@@ -451,9 +578,9 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
     const id = crypto.randomUUID();
     setTables(prev => [...prev, { ...table, id }]);
     const floorId = reverseFloorMapRef.current.get(table.floor);
-    supabase.from('tables').insert({ id, name: table.name, status: table.status, floor_id: floorId })
+    supabase.from('tables').insert({ id, name: table.name, status: table.status, floor_id: floorId, restaurant_id: restaurantId })
       .then(({ error }) => { if (error) console.error('addTable error:', error); });
-  }, []);
+  }, [restaurantId]);
 
   const removeTableFn = useCallback((id: string) => {
     setTables(prev => prev.filter(t => t.id !== id));
@@ -461,20 +588,142 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
       .then(({ error }) => { if (error) console.error('removeTable error:', error); });
   }, []);
 
+  // ─── Floor CRUD ────────────────────────────────
+
+  const addFloor = useCallback((name: string) => {
+    const id = crypto.randomUUID();
+    floorMapRef.current.set(id, name);
+    reverseFloorMapRef.current.set(name, id);
+    setFloors(prev => [...prev, name]);
+    supabase.from('floors').insert({ id, name, sort_order: floors.length + 1, restaurant_id: restaurantId })
+      .then(({ error }) => { if (error) console.error('addFloor error:', error); });
+  }, [floors.length, restaurantId]);
+
+  const removeFloor = useCallback((name: string) => {
+    const floorId = reverseFloorMapRef.current.get(name);
+    if (floorId) {
+      floorMapRef.current.delete(floorId);
+      reverseFloorMapRef.current.delete(name);
+    }
+    setFloors(prev => prev.filter(f => f !== name));
+    if (floorId) {
+      supabase.from('floors').delete().eq('id', floorId)
+        .then(({ error }) => { if (error) console.error('removeFloor error:', error); });
+    }
+  }, []);
+
+  // ─── Staff Functions ───────────────────────────
+
+  const loginWithPin = useCallback(async (pin: string): Promise<Staff | null> => {
+    const { data } = await supabase
+      .from('staff')
+      .select('*')
+      .eq('restaurant_id', restaurantId)
+      .eq('pin', pin)
+      .eq('active', true)
+      .limit(1);
+    if (data && data.length > 0) {
+      const s = mapStaff(data[0]);
+      setStaffId(s.id);
+      setStaffName(s.name);
+      setRoleState(s.role);
+      saveSession({ role: s.role, restaurantId, staffId: s.id, staffName: s.name });
+      return s;
+    }
+    return null;
+  }, [restaurantId]);
+
+  const logout = useCallback(() => {
+    setRoleState(null);
+    setStaffId(null);
+    setStaffName(null);
+    clearSession();
+  }, []);
+
+  const addStaff = useCallback((s: Omit<Staff, 'id'>) => {
+    const id = crypto.randomUUID();
+    setStaff(prev => [...prev, { ...s, id }]);
+    supabase.from('staff').insert({
+      id, restaurant_id: s.restaurantId, name: s.name, role: s.role, pin: s.pin, active: s.active,
+    }).then(({ error }) => { if (error) console.error('addStaff error:', error); });
+  }, []);
+
+  const removeStaff = useCallback((id: string) => {
+    setStaff(prev => prev.filter(s => s.id !== id));
+    supabase.from('staff').update({ active: false }).eq('id', id)
+      .then(({ error }) => { if (error) console.error('removeStaff error:', error); });
+  }, []);
+
+  const updateStaffFn = useCallback((id: string, updates: Partial<Staff>) => {
+    setStaff(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+    const dbUpdates: Record<string, unknown> = {};
+    if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.role !== undefined) dbUpdates.role = updates.role;
+    if (updates.pin !== undefined) dbUpdates.pin = updates.pin;
+    if (updates.active !== undefined) dbUpdates.active = updates.active;
+    if (Object.keys(dbUpdates).length > 0) {
+      supabase.from('staff').update(dbUpdates).eq('id', id)
+        .then(({ error }) => { if (error) console.error('updateStaff error:', error); });
+    }
+  }, []);
+
+  // ─── Daily Closure ─────────────────────────────
+
+  const closeDailyReport = useCallback(async (data: Omit<DailyClosure, 'id'>) => {
+    const id = crypto.randomUUID();
+    await supabase.from('daily_closures').insert({
+      id,
+      restaurant_id: data.restaurantId,
+      closed_by: data.closedBy || null,
+      date: data.date,
+      total_revenue: data.totalRevenue,
+      total_orders: data.totalOrders,
+      cash_total: data.cashTotal,
+      card_total: data.cardTotal,
+      top_products: data.topProducts,
+      notes: data.notes || null,
+    });
+  }, []);
+
+  // ─── Product-Modifier Group Mapping ────────────
+
+  const setProductModifiers = useCallback((menuItemId: string, groupIds: string[]) => {
+    setProductModifierMap(prev => {
+      const next = new Map(prev);
+      next.set(menuItemId, groupIds);
+      return next;
+    });
+    // Sync to DB: delete old, insert new
+    (async () => {
+      await supabase.from('product_modifier_groups').delete().eq('menu_item_id', menuItemId);
+      if (groupIds.length > 0) {
+        await supabase.from('product_modifier_groups').insert(
+          groupIds.map(gid => ({ menu_item_id: menuItemId, modifier_group_id: gid }))
+        );
+      }
+    })();
+  }, []);
+
   // ─── Render ────────────────────────────────────
 
   return (
     <POSContext.Provider value={{
       role, setRole, loading,
+      restaurantId, setRestaurantId,
+      staffId, staffName,
       categories, setCategories,
       menuItems, setMenuItems,
       tables, setTables,
       orders, addOrder, updateOrder, updateOrderStatus, removeOrder, getTableOrders,
       setTableStatus, setTableTotal, openTable, addPayment,
       modifierGroups, floors,
+      staff, loginWithPin, addStaff, removeStaff, updateStaff: updateStaffFn, logout,
       addCategory, removeCategory,
-      addMenuItem: addMenuItemFn, removeMenuItem: removeMenuItemFn,
+      addMenuItem: addMenuItemFn, updateMenuItem: updateMenuItemFn, removeMenuItem: removeMenuItemFn,
       addTable: addTableFn, removeTable: removeTableFn,
+      addFloor, removeFloor,
+      closeDailyReport,
+      productModifierMap, setProductModifiers,
     }}>
       {loading ? (
         <div className="h-screen flex items-center justify-center bg-background">

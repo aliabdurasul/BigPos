@@ -2,6 +2,8 @@ export type UserRole = 'super_admin' | 'restoran_admin' | 'garson' | 'mutfak';
 
 export type TableStatus = 'bos' | 'dolu' | 'odeme_bekliyor';
 
+export type LicensePlan = 'free' | 'starter' | 'pro' | 'enterprise';
+
 export interface MenuItem {
   id: string;
   name: string;
@@ -10,12 +12,19 @@ export interface MenuItem {
   categoryId: string;
   hasModifiers?: boolean;
   image?: string;
+  portionInfo?: string;
+  allergenInfo?: string;
+  spiceLevel?: number;
+  ingredients?: string[];
+  kitchenNote?: string;
+  restaurantId?: string;
 }
 
 export interface Category {
   id: string;
   name: string;
   icon?: string;
+  restaurantId?: string;
 }
 
 export interface Table {
@@ -25,6 +34,7 @@ export interface Table {
   floor: string;
   currentTotal?: number;
   openedAt?: Date;
+  restaurantId?: string;
 }
 
 export interface ModifierGroup {
@@ -32,6 +42,7 @@ export interface ModifierGroup {
   name: string;
   type: 'checkbox' | 'radio';
   options: ModifierOption[];
+  restaurantId?: string;
 }
 
 export interface ModifierOption {
@@ -77,10 +88,47 @@ export interface Order {
   total: number;
   payments?: Payment[];
   prepayment?: number;
+  restaurantId?: string;
+  staffId?: string;
+}
+
+export interface Staff {
+  id: string;
+  restaurantId: string;
+  name: string;
+  role: UserRole;
+  pin: string;
+  active: boolean;
+}
+
+export interface DailyClosure {
+  id: string;
+  restaurantId: string;
+  closedBy?: string;
+  closedAt: Date;
+  date: string;
+  totalRevenue: number;
+  totalOrders: number;
+  cashTotal: number;
+  cardTotal: number;
+  topProducts: { name: string; count: number }[];
+  notes?: string;
 }
 
 export interface Restaurant {
   id: string;
   name: string;
+  slug?: string;
+  ownerName?: string;
+  phone?: string;
+  address?: string;
+  licensePlan: LicensePlan;
   active: boolean;
+  settings?: Record<string, unknown>;
+  createdAt?: Date;
+}
+
+export interface ProductModifierGroup {
+  menuItemId: string;
+  modifierGroupId: string;
 }
