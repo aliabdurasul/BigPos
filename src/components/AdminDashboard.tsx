@@ -1,11 +1,14 @@
 import { useState, useMemo } from 'react';
 import { usePOS } from '@/context/POSContext';
+import { useAuth } from '@/context/AuthContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, ShoppingCart, Clock, Award, CreditCard, Banknote, FileText, X, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function AdminDashboard() {
-  const { orders, tables, closeDailyReport, restaurantId, staffName } = usePOS();
+  const { orders, tables, closeDailyReport, restaurantId } = usePOS();
+  const { session } = useAuth();
+  const staffName = session?.name || null;
   const [showReceipt, setShowReceipt] = useState(false);
   const [closing, setClosing] = useState(false);
 

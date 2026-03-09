@@ -2,45 +2,16 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { supabase } from '@/lib/supabase';
 import {
   Category, MenuItem, Table, Order, OrderItem, OrderStatus,
-  UserRole, ModifierGroup, TableStatus, Payment, ModifierOption,
-  Staff, DailyClosure, Restaurant,
+  ModifierGroup, TableStatus, Payment, ModifierOption,
+  Staff, DailyClosure,
 } from '@/types/pos';
-
-// ─── Session Persistence ───────────────────────────
-const SESSION_KEY = 'pos_session';
-interface SessionData {
-  role: UserRole | null;
-  restaurantId: string | null;
-  staffId: string | null;
-  staffName: string | null;
-}
-function loadSession(): SessionData {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch { /* ignore */ }
-  return { role: null, restaurantId: null, staffId: null, staffName: null };
-}
-function saveSession(data: SessionData) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify(data));
-}
-function clearSession() {
-  localStorage.removeItem(SESSION_KEY);
-}
-
-// Default restaurant for single-tenant setup
-const DEFAULT_RESTAURANT_ID = '00000000-0000-0000-0000-000000000001';
 
 // ─── Context Type ──────────────────────────────────
 
 interface POSContextType {
-  role: UserRole | null;
-  setRole: (role: UserRole | null) => void;
   loading: boolean;
   restaurantId: string;
-  setRestaurantId: (id: string) => void;
   staffId: string | null;
-  staffName: string | null;
   categories: Category[];
   setCategories: React.Dispatch<React.SetStateAction<Category[]>>;
   menuItems: MenuItem[];
@@ -59,13 +30,11 @@ interface POSContextType {
   addPayment: (orderId: string, payment: Payment) => void;
   modifierGroups: ModifierGroup[];
   floors: string[];
-  // Staff
+  // Staff management (admin CRUD)
   staff: Staff[];
-  loginWithPin: (pin: string) => Promise<Staff | null>;
   addStaff: (s: Omit<Staff, 'id'>) => void;
   removeStaff: (id: string) => void;
   updateStaff: (id: string, updates: Partial<Staff>) => void;
-  logout: () => void;
   // Admin CRUD
   addCategory: (cat: Omit<Category, 'id'>) => void;
   removeCategory: (id: string) => void;
@@ -177,13 +146,14 @@ function mapStaff(row: Record<string, unknown>): Staff {
 
 // ─── Provider ─────────────────────────────────────
 
-export function POSProvider({ children }: { children: React.ReactNode }) {
-  const session = loadSession();
+interface POSProviderProps {
+  restaurantId: string;
+  staffId: string | null;
+  children: React.ReactNode;
+}
+
+export function POSProvider({ restaurantId, staffId, children }: POSProviderProps) {
   const [loading, setLoading] = useState(true);
-  const [role, setRoleState] = useState<UserRole | null>(session.role);
-  const [restaurantId, setRestaurantIdState] = useState<string>(session.restaurantId || DEFAULT_RESTAURANT_ID);
-  const [staffId, setStaffId] = useState<string | null>(session.staffId);
-  const [staffName, setStaffName] = useState<string | null>(session.staffName);
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
@@ -192,16 +162,6 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
   const [floors, setFloors] = useState<string[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [productModifierMap, setProductModifierMap] = useState<Map<string, string[]>>(new Map());
-
-  const setRole = useCallback((r: UserRole | null) => {
-    setRoleState(r);
-    saveSession({ role: r, restaurantId, staffId, staffName });
-  }, [restaurantId, staffId, staffName]);
-
-  const setRestaurantId = useCallback((id: string) => {
-    setRestaurantIdState(id);
-    saveSession({ role, restaurantId: id, staffId, staffName });
-  }, [role, staffId, staffName]);
 
   const floorMapRef = useRef(new Map<string, string>());
   const reverseFloorMapRef = useRef(new Map<string, string>());
@@ -612,33 +572,7 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // ─── Staff Functions ───────────────────────────
-
-  const loginWithPin = useCallback(async (pin: string): Promise<Staff | null> => {
-    const { data } = await supabase
-      .from('staff')
-      .select('*')
-      .eq('restaurant_id', restaurantId)
-      .eq('pin', pin)
-      .eq('active', true)
-      .limit(1);
-    if (data && data.length > 0) {
-      const s = mapStaff(data[0]);
-      setStaffId(s.id);
-      setStaffName(s.name);
-      setRoleState(s.role);
-      saveSession({ role: s.role, restaurantId, staffId: s.id, staffName: s.name });
-      return s;
-    }
-    return null;
-  }, [restaurantId]);
-
-  const logout = useCallback(() => {
-    setRoleState(null);
-    setStaffId(null);
-    setStaffName(null);
-    clearSession();
-  }, []);
+  // ─── Staff CRUD (for admin panel) ──────────────
 
   const addStaff = useCallback((s: Omit<Staff, 'id'>) => {
     const id = crypto.randomUUID();
@@ -708,16 +642,15 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <POSContext.Provider value={{
-      role, setRole, loading,
-      restaurantId, setRestaurantId,
-      staffId, staffName,
+      loading,
+      restaurantId, staffId,
       categories, setCategories,
       menuItems, setMenuItems,
       tables, setTables,
       orders, addOrder, updateOrder, updateOrderStatus, removeOrder, getTableOrders,
       setTableStatus, setTableTotal, openTable, addPayment,
       modifierGroups, floors,
-      staff, loginWithPin, addStaff, removeStaff, updateStaff: updateStaffFn, logout,
+      staff, addStaff, removeStaff, updateStaff: updateStaffFn,
       addCategory, removeCategory,
       addMenuItem: addMenuItemFn, updateMenuItem: updateMenuItemFn, removeMenuItem: removeMenuItemFn,
       addTable: addTableFn, removeTable: removeTableFn,
@@ -729,8 +662,8 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
         <div className="h-screen flex items-center justify-center bg-background">
           <div className="text-center">
             <div className="animate-spin w-12 h-12 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
-            <h1 className="text-2xl font-black mb-1">🍽️ Lezzet-i Ala POS</h1>
-            <p className="text-muted-foreground">Yükleniyor...</p>
+            <h1 className="text-2xl font-black mb-1">Lezzet-i Ala POS</h1>
+            <p className="text-muted-foreground">Yukleniyor...</p>
           </div>
         </div>
       ) : children}

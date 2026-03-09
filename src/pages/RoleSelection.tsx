@@ -1,123 +1,87 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { usePOS } from '@/context/POSContext';
-import { LogIn, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
+import { Shield, Monitor, ArrowRight } from 'lucide-react';
 
 const rolePaths: Record<string, string> = {
+  super_admin: '/super-admin',
+  restoran_admin: '/admin',
   garson: '/garson',
   mutfak: '/mutfak',
-  restoran_admin: '/admin',
-  super_admin: '/super-admin',
-};
-
-const roleColors: Record<string, string> = {
-  garson: 'from-primary/20 to-primary/5',
-  mutfak: 'from-pos-warning/20 to-pos-warning/5',
-  restoran_admin: 'from-pos-info/20 to-pos-info/5',
-  super_admin: 'from-pos-danger/20 to-pos-danger/5',
+  manager: '/garson',
 };
 
 export default function RoleSelection() {
-  const { role, loginWithPin, logout, staffName } = usePOS();
+  const { session } = useAuth();
   const navigate = useNavigate();
-  const [pin, setPin] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [slug, setSlug] = useState('');
 
-  // Restore session: if already logged in, redirect
+  // Auto-redirect if already logged in
   useEffect(() => {
-    if (role && rolePaths[role]) {
-      navigate(rolePaths[role]);
+    if (session) {
+      const path = rolePaths[session.role] || '/';
+      navigate(path, { replace: true });
     }
-  }, [role, navigate]);
+  }, [session, navigate]);
 
-  const handlePinLogin = async () => {
-    if (pin.length < 4) {
-      toast.error('PIN en az 4 haneli olmalıdır');
-      return;
-    }
-    setLoading(true);
-    const staff = await loginWithPin(pin);
-    setLoading(false);
-    if (staff) {
-      toast.success(`Hoş geldiniz, ${staff.name}!`);
-      const path = rolePaths[staff.role] || '/';
-      navigate(path);
-    } else {
-      toast.error('Geçersiz PIN kodu');
-      setPin('');
-    }
-  };
-
-  const handleNumPad = (digit: string) => {
-    if (pin.length < 6) setPin(prev => prev + digit);
-  };
-
-  const handleBackspace = () => {
-    setPin(prev => prev.slice(0, -1));
+  const handlePOSEntry = () => {
+    const trimmed = slug.trim().toLowerCase();
+    if (!trimmed) return;
+    navigate(`/pos/${encodeURIComponent(trimmed)}`);
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-8 p-6 bg-background">
+    <div className="min-h-screen flex flex-col items-center justify-center gap-10 p-6 bg-background">
       <div className="text-center">
         <h1 className="text-4xl font-black tracking-tight mb-2">Lezzet-i Ala POS</h1>
-        <p className="text-muted-foreground text-lg">PIN kodunuzu girerek giriş yapın</p>
+        <p className="text-muted-foreground text-lg">Giris turunu secin</p>
       </div>
 
-      <div className="w-full max-w-xs space-y-4">
-        {/* PIN Display */}
-        <div className="flex justify-center gap-3">
-          {[0, 1, 2, 3].map(i => (
-            <div
-              key={i}
-              className={`w-14 h-14 rounded-2xl border-2 flex items-center justify-center text-2xl font-black transition-all ${
-                pin.length > i ? 'border-primary bg-primary/10 text-primary' : 'border-muted bg-card'
-              }`}
-            >
-              {pin.length > i ? '●' : ''}
-            </div>
-          ))}
-        </div>
-
-        {/* Numpad */}
-        <div className="grid grid-cols-3 gap-2">
-          {['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'back'].map((key) => {
-            if (key === '') return <div key="empty" />;
-            if (key === 'back') {
-              return (
-                <button
-                  key="back"
-                  onClick={handleBackspace}
-                  className="h-16 rounded-2xl bg-muted font-bold text-lg pos-btn flex items-center justify-center"
-                >
-                  ←
-                </button>
-              );
-            }
-            return (
-              <button
-                key={key}
-                onClick={() => handleNumPad(key)}
-                className="h-16 rounded-2xl bg-card border font-bold text-xl pos-btn hover:bg-muted transition-colors"
-              >
-                {key}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Login Button */}
+      <div className="w-full max-w-md space-y-4">
+        {/* Admin Login */}
         <button
-          onClick={handlePinLogin}
-          disabled={pin.length < 4 || loading}
-          className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-black text-lg flex items-center justify-center gap-2 pos-btn disabled:opacity-40 shadow-lg shadow-primary/20"
+          onClick={() => navigate('/login')}
+          className="w-full flex items-center gap-4 p-5 rounded-2xl border bg-card hover:bg-muted transition-colors active:scale-[0.98]"
         >
-          {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogIn className="w-5 h-5" />}
-          Giriş Yap
+          <div className="w-14 h-14 rounded-xl bg-pos-info/10 flex items-center justify-center shrink-0">
+            <Shield className="w-7 h-7 text-pos-info" />
+          </div>
+          <div className="text-left flex-1">
+            <p className="font-bold text-lg">Yonetici Girisi</p>
+            <p className="text-sm text-muted-foreground">Super Admin veya Restoran Yoneticisi</p>
+          </div>
+          <ArrowRight className="w-5 h-5 text-muted-foreground" />
         </button>
-      </div>
 
-      <p className="text-xs text-muted-foreground mt-4">Varsayılan PIN: Admin 1234 | Garson 1111 | Mutfak 2222</p>
+        {/* POS Staff Login */}
+        <div className="p-5 rounded-2xl border bg-card space-y-3">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+              <Monitor className="w-7 h-7 text-primary" />
+            </div>
+            <div className="text-left flex-1">
+              <p className="font-bold text-lg">POS Girisi</p>
+              <p className="text-sm text-muted-foreground">Personel PIN ile giris</p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <input
+              value={slug}
+              onChange={e => setSlug(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handlePOSEntry()}
+              placeholder="Restoran kodu (orn: lezzet-i-ala)"
+              className="flex-1 px-4 py-3 rounded-xl border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <button
+              onClick={handlePOSEntry}
+              disabled={!slug.trim()}
+              className="px-5 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm pos-btn disabled:opacity-40 flex items-center gap-1.5"
+            >
+              <ArrowRight className="w-4 h-4" /> Git
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

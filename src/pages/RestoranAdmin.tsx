@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { usePOS } from '@/context/POSContext';
+import { useAuth } from '@/context/AuthContext';
 import { MenuItem, Staff } from '@/types/pos';
 import { ArrowLeft, Plus, Trash2, UtensilsCrossed, Grid3X3, Tag, Users, Store, BarChart3, Edit3, X, Layers, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -23,8 +24,10 @@ export default function RestoranAdmin() {
     addCategory, removeCategory, addMenuItem, updateMenuItem, removeMenuItem,
     addTable, removeTable, addFloor, removeFloor,
     staff, addStaff, removeStaff, updateStaff,
-    restaurantId, logout, staffName,
+    restaurantId,
   } = usePOS();
+  const { session, logout } = useAuth();
+  const staffName = session?.name || null;
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>('raporlar');
 
@@ -388,7 +391,7 @@ export default function RestoranAdmin() {
                 <select value={staffForm.role} onChange={e => setStaffForm(p => ({ ...p, role: e.target.value }))} className="w-full px-4 py-3 rounded-xl border bg-card text-sm mt-1">
                   <option value="garson">Garson</option>
                   <option value="mutfak">Mutfak</option>
-                  <option value="restoran_admin">Admin</option>
+                  <option value="manager">Manager</option>
                 </select>
               </div>
               <div>

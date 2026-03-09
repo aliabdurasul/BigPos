@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { usePOS } from '@/context/POSContext';
+import { useAuth } from '@/context/AuthContext';
 import { OrderItem, Table, MenuItem, OrderItemModifier, Payment } from '@/types/pos';
 import { ArrowLeft, Minus, Plus, Send, Trash2, X, CreditCard, Banknote, Search, SplitSquareHorizontal, Clock, Edit3, MessageSquare, AlertTriangle, Users, Receipt, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -15,7 +16,9 @@ function formatDuration(openedAt?: Date) {
 }
 
 export default function GarsonPOS() {
-  const { tables, categories, menuItems, addOrder, getTableOrders, setTableStatus, setTableTotal, openTable, modifierGroups, floors, addPayment, orders, removeOrder, updateOrder, productModifierMap, logout, staffName } = usePOS();
+  const { tables, categories, menuItems, addOrder, getTableOrders, setTableStatus, setTableTotal, openTable, modifierGroups, floors, addPayment, orders, removeOrder, updateOrder, productModifierMap } = usePOS();
+  const { session, logout } = useAuth();
+  const staffName = session?.name || null;
   const navigate = useNavigate();
   const [selectedTable, setSelectedTable] = useState<Table | null>(null);
   const [selectedCategory, setSelectedCategory] = useState(categories[0]?.id || '');

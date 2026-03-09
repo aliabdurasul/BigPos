@@ -1,8 +1,23 @@
-export type UserRole = 'super_admin' | 'restoran_admin' | 'garson' | 'mutfak';
+export type UserRole = 'super_admin' | 'restoran_admin' | 'garson' | 'mutfak' | 'manager';
 
 export type TableStatus = 'bos' | 'dolu' | 'odeme_bekliyor';
 
 export type LicensePlan = 'free' | 'starter' | 'pro' | 'enterprise';
+
+// ─── Platform Auth Types ───────────────────────
+
+export interface PlatformUser {
+  id: string;
+  email: string;
+  name: string;
+  role: 'super_admin' | 'restoran_admin';
+  restaurantId: string | null;
+  active: boolean;
+}
+
+export type AuthSession =
+  | { type: 'admin'; userId: string; email: string; name: string; role: 'super_admin' | 'restoran_admin'; restaurantId: string | null }
+  | { type: 'staff'; staffId: string; name: string; role: 'garson' | 'mutfak' | 'manager'; restaurantId: string };
 
 export interface MenuItem {
   id: string;
@@ -120,6 +135,7 @@ export interface Restaurant {
   name: string;
   slug?: string;
   ownerName?: string;
+  ownerEmail?: string;
   phone?: string;
   address?: string;
   licensePlan: LicensePlan;
