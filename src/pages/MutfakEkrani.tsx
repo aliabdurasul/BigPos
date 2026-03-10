@@ -1,6 +1,7 @@
 import { usePOS } from '@/context/POSContext';
+import { useAuth } from '@/context/AuthContext';
 import { Order, OrderStatus } from '@/types/pos';
-import { ArrowLeft, Clock, ChefHat } from 'lucide-react';
+import { ArrowLeft, Clock, ChefHat, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const columns: { status: OrderStatus; label: string; emoji: string; bgClass: string }[] = [
@@ -65,14 +66,15 @@ function OrderCard({ order, onStatusChange }: { order: Order; onStatusChange: (s
 
 export default function MutfakEkrani() {
   const { orders, updateOrderStatus } = usePOS();
+  const { logout } = useAuth();
   const navigate = useNavigate();
   const newCount = orders.filter(o => o.status === 'yeni').length;
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background">
       <header className="flex items-center gap-3 px-4 py-3 bg-card border-b shrink-0">
-        <button onClick={() => navigate('/')} className="p-2 rounded-lg hover:bg-muted pos-btn">
-          <ArrowLeft className="w-5 h-5" />
+        <button onClick={() => { logout(); navigate('/'); }} className="p-2 rounded-lg hover:bg-muted pos-btn" title="Çıkış">
+          <LogOut className="w-5 h-5" />
         </button>
         <ChefHat className="w-6 h-6 text-primary" />
         <h1 className="text-xl font-black">Mutfak Ekranı</h1>
