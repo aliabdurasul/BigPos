@@ -6,6 +6,7 @@ import { ArrowLeft, Minus, Plus, Send, Trash2, X, CreditCard, Banknote, Search, 
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { formatAdisyon, printReceipt } from '@/lib/receipt';
+import { playSuccess, playClick } from '@/lib/sound';
 
 function formatDuration(openedAt?: Date) {
   if (!openedAt) return '';
@@ -199,6 +200,7 @@ export default function GarsonPOS() {
     setTableTotal(selectedTable.id, total);
     setOrderItems(prev => prev.map(i => ({ ...i, sentToKitchen: true })));
     toast.success('Sipariş mutfağa gönderildi!');
+    playSuccess();
   };
 
   const clearOrder = () => {
@@ -261,10 +263,11 @@ export default function GarsonPOS() {
     }
 
     toast.success(`${payAmount} ₺ ödeme alındı: ${method}`);
+    playSuccess();
     setPaymentConfirm(null);
 
     const newPaid = totalPaid + payAmount;
-    if (newPaid >= total) {
+    if (newPaid + totalPrepayment >= total) {
       closeTable();
     } else {
       setTableStatus(selectedTable!.id, 'odeme_bekliyor');
@@ -285,6 +288,7 @@ export default function GarsonPOS() {
     setPrepaymentAmount('');
     setShowPrepayment(false);
     toast.success(`${amount} ₺ ön ödeme alındı`);
+    playClick();
   };
 
   const printAdisyon = () => {

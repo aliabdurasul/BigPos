@@ -52,6 +52,13 @@ interface POSContextType {
   // Product-modifier mapping
   productModifierMap: Map<string, string[]>;
   setProductModifiers: (menuItemId: string, groupIds: string[]) => void;
+  // Modifier CRUD
+  addModifierGroup: (group: { name: string; type: 'checkbox' | 'radio' }) => Promise<string>;
+  updateModifierGroup: (id: string, updates: { name?: string; type?: 'checkbox' | 'radio' }) => Promise<void>;
+  removeModifierGroup: (id: string) => Promise<void>;
+  addModifierOption: (groupId: string, option: { name: string; extraPrice: number }) => Promise<string>;
+  updateModifierOption: (id: string, groupId: string, updates: { name?: string; extraPrice?: number }) => Promise<void>;
+  removeModifierOption: (id: string, groupId: string) => Promise<void>;
 }
 
 const POSContext = createContext<POSContextType | null>(null);
@@ -525,6 +532,7 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
     if (updates.description !== undefined) dbUpdates.description = updates.description || null;
     if (updates.price !== undefined) dbUpdates.price = updates.price;
     if (updates.categoryId !== undefined) dbUpdates.category_id = updates.categoryId;
+    if (updates.hasModifiers !== undefined) dbUpdates.has_modifiers = updates.hasModifiers;
     if (updates.image !== undefined) dbUpdates.image = updates.image || null;
     if (updates.portionInfo !== undefined) dbUpdates.portion_info = updates.portionInfo || null;
     if (updates.allergenInfo !== undefined) dbUpdates.allergen_info = updates.allergenInfo || null;
@@ -647,6 +655,71 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
     })();
   }, []);
 
+  // ─── Modifier Group CRUD ───────────────────────
+
+  const addModifierGroup = useCallback(async (group: { name: string; type: 'checkbox' | 'radio' }) => {
+    const id = crypto.randomUUID();
+    const { error } = await supabase.from('modifier_groups').insert({
+      id, name: group.name, type: group.type, restaurant_id: restaurantId, sort_order: modifierGroups.length,
+    });
+    if (error) { console.error('addModifierGroup error:', error); throw error; }
+    setModifierGroups(prev => [...prev, { id, name: group.name, type: group.type, options: [], restaurantId }]);
+    return id;
+  }, [restaurantId, modifierGroups.length]);
+
+  const updateModifierGroup = useCallback(async (id: string, updates: { name?: string; type?: 'checkbox' | 'radio' }) => {
+    const dbUpdates: Record<string, unknown> = {};
+    if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.type !== undefined) dbUpdates.type = updates.type;
+    if (Object.keys(dbUpdates).length > 0) {
+      const { error } = await supabase.from('modifier_groups').update(dbUpdates).eq('id', id);
+      if (error) { console.error('updateModifierGroup error:', error); throw error; }
+    }
+    setModifierGroups(prev => prev.map(g => g.id === id ? { ...g, ...updates } : g));
+  }, []);
+
+  const removeModifierGroup = useCallback(async (id: string) => {
+    const { error } = await supabase.from('modifier_groups').delete().eq('id', id);
+    if (error) { console.error('removeModifierGroup error:', error); throw error; }
+    setModifierGroups(prev => prev.filter(g => g.id !== id));
+  }, []);
+
+  const addModifierOption = useCallback(async (groupId: string, option: { name: string; extraPrice: number }) => {
+    const id = crypto.randomUUID();
+    const { error } = await supabase.from('modifier_options').insert({
+      id, group_id: groupId, name: option.name, extra_price: option.extraPrice,
+    });
+    if (error) { console.error('addModifierOption error:', error); throw error; }
+    setModifierGroups(prev => prev.map(g => {
+      if (g.id !== groupId) return g;
+      return { ...g, options: [...g.options, { id, name: option.name, extraPrice: option.extraPrice }] };
+    }));
+    return id;
+  }, []);
+
+  const updateModifierOption = useCallback(async (id: string, groupId: string, updates: { name?: string; extraPrice?: number }) => {
+    const dbUpdates: Record<string, unknown> = {};
+    if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.extraPrice !== undefined) dbUpdates.extra_price = updates.extraPrice;
+    if (Object.keys(dbUpdates).length > 0) {
+      const { error } = await supabase.from('modifier_options').update(dbUpdates).eq('id', id);
+      if (error) { console.error('updateModifierOption error:', error); throw error; }
+    }
+    setModifierGroups(prev => prev.map(g => {
+      if (g.id !== groupId) return g;
+      return { ...g, options: g.options.map(o => o.id === id ? { ...o, ...updates } : o) };
+    }));
+  }, []);
+
+  const removeModifierOption = useCallback(async (id: string, groupId: string) => {
+    const { error } = await supabase.from('modifier_options').delete().eq('id', id);
+    if (error) { console.error('removeModifierOption error:', error); throw error; }
+    setModifierGroups(prev => prev.map(g => {
+      if (g.id !== groupId) return g;
+      return { ...g, options: g.options.filter(o => o.id !== id) };
+    }));
+  }, []);
+
   // ─── Render ────────────────────────────────────
 
   return (
@@ -666,6 +739,8 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
       addFloor, removeFloor,
       closeDailyReport,
       productModifierMap, setProductModifiers,
+      addModifierGroup, updateModifierGroup, removeModifierGroup,
+      addModifierOption, updateModifierOption, removeModifierOption,
     }}>
       {loading ? (
         <div className="h-screen flex items-center justify-center bg-background">

@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Order, OrderStatus } from '@/types/pos';
 import { ArrowLeft, Clock, ChefHat, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { playNotification } from '@/lib/sound';
 
 const columns: { status: OrderStatus; label: string; emoji: string; bgClass: string }[] = [
   { status: 'yeni', label: 'Yeni Sipariş', emoji: '🔴', bgClass: 'border-pos-danger' },
@@ -78,21 +79,7 @@ export default function MutfakEkrani() {
   const prevNewCount = useRef(newCount);
   useEffect(() => {
     if (newCount > prevNewCount.current) {
-      // Triple beep via Web Audio API
-      try {
-        const ctx = new AudioContext();
-        [0, 0.25, 0.5].forEach(delay => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.frequency.value = 880;
-          osc.type = 'square';
-          gain.gain.value = 0.3;
-          osc.start(ctx.currentTime + delay);
-          osc.stop(ctx.currentTime + delay + 0.15);
-        });
-      } catch { /* AudioContext not available */ }
+      playNotification();
     }
     prevNewCount.current = newCount;
   }, [newCount]);
