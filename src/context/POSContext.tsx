@@ -504,6 +504,7 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
       portion_info: item.portionInfo || null, allergen_info: item.allergenInfo || null,
       spice_level: item.spiceLevel || 0, ingredients: item.ingredients || [],
       kitchen_note: item.kitchenNote || null, restaurant_id: restaurantId,
+      active: true,
     });
     if (error) { console.error('addMenuItem error:', error); throw error; }
     setMenuItems(prev => [...prev, { ...item, id }]);

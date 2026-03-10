@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { usePOS } from '@/context/POSContext';
 import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, ShoppingCart, Clock, Award, CreditCard, Banknote, FileText, X, Loader2 } from 'lucide-react';
+import { TrendingUp, ShoppingCart, Clock, Award, CreditCard, Banknote, FileText, X, Loader2, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function AdminDashboard() {
@@ -11,6 +12,41 @@ export default function AdminDashboard() {
   const staffName = session?.name || null;
   const [showReceipt, setShowReceipt] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [restaurantName, setRestaurantName] = useState('');
+  const receiptRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!restaurantId) return;
+    supabase.from('restaurants').select('name').eq('id', restaurantId).single()
+      .then(({ data }) => { if (data) setRestaurantName((data as { name: string }).name); });
+  }, [restaurantId]);
+
+  const handlePrint = () => {
+    if (!receiptRef.current) return;
+    const printWindow = window.open('', '_blank', 'width=300,height=600');
+    if (!printWindow) return;
+    printWindow.document.write(`
+      <html><head><title>Gun Sonu Fisi</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Courier New', monospace; width: 80mm; padding: 4mm; font-size: 12px; color: #000; }
+        .center { text-align: center; }
+        .bold { font-weight: bold; }
+        .line { border-top: 1px dashed #000; margin: 6px 0; }
+        .row { display: flex; justify-content: space-between; margin: 2px 0; }
+        .big { font-size: 16px; }
+        h1 { font-size: 18px; margin-bottom: 4px; }
+        .mt { margin-top: 8px; }
+        @media print { body { width: 80mm; } }
+      </style></head><body>
+      ${receiptRef.current.innerHTML}
+      </body></html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+    printWindow.close();
+  };
 
   // Generate hourly data from REAL orders only
   const hourlyData = useMemo(() => {
@@ -242,7 +278,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Gun Sonu Dialog */}
+      {/* Gun Sonu Fis Dialog */}
       {showReceipt && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setShowReceipt(false)}>
           <div
@@ -250,40 +286,115 @@ export default function AdminDashboard() {
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 py-3 border-b">
-              <h3 className="font-black text-sm">Gun Sonu Raporu</h3>
-              <button onClick={() => setShowReceipt(false)} className="p-2 rounded-lg hover:bg-muted pos-btn">
-                <X className="w-4 h-4" />
-              </button>
+              <h3 className="font-black text-sm">Gun Sonu Fisi</h3>
+              <div className="flex gap-1">
+                <button onClick={handlePrint} className="p-2 rounded-lg hover:bg-muted pos-btn" title="Yazdir">
+                  <Printer className="w-4 h-4" />
+                </button>
+                <button onClick={() => setShowReceipt(false)} className="p-2 rounded-lg hover:bg-muted pos-btn">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-            <div className="p-5 space-y-3">
-              <p className="text-sm text-muted-foreground">{shortDate}</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded-xl bg-muted">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Toplam Ciro</p>
-                  <p className="text-lg font-black">{fmt(stats.totalRevenue)}</p>
+
+            {/* Termal yazici fis formati */}
+            <div ref={receiptRef} className="p-5 max-h-[70vh] overflow-y-auto">
+              <div style={{ fontFamily: "'Courier New', monospace", fontSize: 12, lineHeight: 1.6, color: '#000' }}>
+                <div style={{ textAlign: 'center', marginBottom: 8 }}>
+                  <div style={{ fontSize: 18, fontWeight: 'bold' }}>{restaurantName || 'RESTORAN'}</div>
+                  <div style={{ fontSize: 10, color: '#666', marginTop: 2 }}>GUN SONU RAPORU</div>
                 </div>
-                <div className="p-3 rounded-xl bg-muted">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Siparis</p>
-                  <p className="text-lg font-black">{stats.totalOrders}</p>
+
+                <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Tarih:</span>
+                  <span style={{ fontWeight: 'bold' }}>{shortDate}</span>
                 </div>
-                <div className="p-3 rounded-xl bg-muted">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Nakit</p>
-                  <p className="text-lg font-black">{fmt(stats.cashPayments)}</p>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Saat:</span>
+                  <span style={{ fontWeight: 'bold' }}>{new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
-                <div className="p-3 rounded-xl bg-muted">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Kart</p>
-                  <p className="text-lg font-black">{fmt(stats.cardPayments)}</p>
+                {staffName && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Kapatan:</span>
+                    <span style={{ fontWeight: 'bold' }}>{staffName}</span>
+                  </div>
+                )}
+
+                <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: 14 }}>
+                  <span>TOPLAM CIRO</span>
+                  <span>{fmt(stats.totalRevenue)}</span>
+                </div>
+
+                <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+
+                <div style={{ fontWeight: 'bold', marginBottom: 2 }}>ODEME DETAYI</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Nakit:</span>
+                  <span>{fmt(stats.cashPayments)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Kredi Karti:</span>
+                  <span>{fmt(stats.cardPayments)}</span>
+                </div>
+
+                <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+
+                <div style={{ fontWeight: 'bold', marginBottom: 2 }}>SATIS ADETLERI</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Toplam Siparis:</span>
+                  <span style={{ fontWeight: 'bold' }}>{stats.totalOrders} adet</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Nakit Islem:</span>
+                  <span>{orders.filter(o => (o.payments || []).some(p => p.method === 'nakit')).length} adet</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Kart Islem:</span>
+                  <span>{orders.filter(o => (o.payments || []).some(p => p.method === 'kredi_karti')).length} adet</span>
+                </div>
+
+                {stats.topSelling.length > 0 && (
+                  <>
+                    <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+                    <div style={{ fontWeight: 'bold', marginBottom: 2 }}>EN COK SATILAN</div>
+                    {stats.topSelling.map((p, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>{i + 1}. {p.name}</span>
+                        <span>{p.count} ad.</span>
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+
+                <div style={{ fontWeight: 'bold', marginBottom: 2 }}>MASA DURUMU</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Bos:</span>
+                  <span>{stats.availableTables}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Dolu:</span>
+                  <span>{stats.activeTables}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Odeme Bekliyor:</span>
+                  <span>{tables.filter(t => t.status === 'odeme_bekliyor').length}</span>
+                </div>
+
+                <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }} />
+
+                <div style={{ textAlign: 'center', fontSize: 10, color: '#666' }}>
+                  <div>--- GUN SONU ---</div>
+                  <div style={{ marginTop: 4 }}>Bu fis otomatik olusturulmustur</div>
                 </div>
               </div>
-              {stats.topSelling.length > 0 && (
-                <div>
-                  <p className="text-xs font-bold text-muted-foreground uppercase mb-2">En Cok Satiranlar</p>
-                  {stats.topSelling.map((p, i) => (
-                    <p key={i} className="text-sm">{i + 1}. {p.name} - {p.count} adet</p>
-                  ))}
-                </div>
-              )}
             </div>
+
             <div className="px-5 pb-5 flex gap-2">
               <button
                 onClick={handleCloseDay}
@@ -294,10 +405,11 @@ export default function AdminDashboard() {
                 Gunu Kapat ve Kaydet
               </button>
               <button
-                onClick={() => setShowReceipt(false)}
-                className="px-5 py-3.5 rounded-xl border bg-card font-bold text-sm pos-btn"
+                onClick={handlePrint}
+                className="px-5 py-3.5 rounded-xl border bg-card font-bold text-sm pos-btn flex items-center gap-2"
               >
-                Iptal
+                <Printer className="w-4 h-4" />
+                Yazdir
               </button>
             </div>
           </div>
