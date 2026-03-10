@@ -39,7 +39,7 @@ export default function StaffLogin() {
       const { data, error } = await supabase
         .from('restaurants')
         .select('id, name')
-        .eq('slug', slug)
+        .eq('slug', decodeURIComponent(slug).toLowerCase().trim())
         .eq('active', true)
         .limit(1);
 
