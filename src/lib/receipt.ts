@@ -257,7 +257,9 @@ export function printReceipt(text: string, title: string = 'Fis') {
 </style></head>
 <body>${escaped}</body></html>`);
   printWindow.document.close();
-  printWindow.focus();
-  printWindow.print();
-  printWindow.close();
+  // Non-blocking: let the browser render before printing
+  setTimeout(() => {
+    printWindow.focus();
+    printWindow.print();
+  }, 0);
 }
