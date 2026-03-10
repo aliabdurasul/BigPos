@@ -1,7 +1,8 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { usePOS } from '@/context/POSContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { formatGunSonu, printReceipt } from '@/lib/receipt';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, ShoppingCart, Clock, Award, CreditCard, Banknote, FileText, X, Loader2, Printer } from 'lucide-react';
 import { toast } from 'sonner';
@@ -13,7 +14,6 @@ export default function AdminDashboard() {
   const [showReceipt, setShowReceipt] = useState(false);
   const [closing, setClosing] = useState(false);
   const [restaurantName, setRestaurantName] = useState('');
-  const receiptRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!restaurantId) return;
@@ -21,31 +21,24 @@ export default function AdminDashboard() {
       .then(({ data }) => { if (data) setRestaurantName((data as { name: string }).name); });
   }, [restaurantId]);
 
+  const buildGunSonuData = () => ({
+    restaurantName: restaurantName || 'RESTORAN',
+    date: new Date(),
+    closedBy: staffName || 'Bilinmiyor',
+    totalRevenue: stats.totalRevenue,
+    cashTotal: stats.cashPayments,
+    cardTotal: stats.cardPayments,
+    totalOrders: stats.totalOrders,
+    cashTransactions: orders.filter(o => (o.payments || []).some(p => p.method === 'nakit')).length,
+    cardTransactions: orders.filter(o => (o.payments || []).some(p => p.method === 'kredi_karti')).length,
+    emptyTables: stats.availableTables,
+    occupiedTables: stats.activeTables,
+    waitingPaymentTables: tables.filter(t => t.status === 'odeme_bekliyor').length,
+    topProducts: stats.topSelling,
+  });
+
   const handlePrint = () => {
-    if (!receiptRef.current) return;
-    const printWindow = window.open('', '_blank', 'width=300,height=600');
-    if (!printWindow) return;
-    printWindow.document.write(`
-      <html><head><title>Gun Sonu Fisi</title>
-      <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Courier New', monospace; width: 80mm; padding: 4mm; font-size: 12px; color: #000; }
-        .center { text-align: center; }
-        .bold { font-weight: bold; }
-        .line { border-top: 1px dashed #000; margin: 6px 0; }
-        .row { display: flex; justify-content: space-between; margin: 2px 0; }
-        .big { font-size: 16px; }
-        h1 { font-size: 18px; margin-bottom: 4px; }
-        .mt { margin-top: 8px; }
-        @media print { body { width: 80mm; } }
-      </style></head><body>
-      ${receiptRef.current.innerHTML}
-      </body></html>
-    `);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-    printWindow.close();
+    printReceipt(formatGunSonu(buildGunSonuData()), 'Gun Sonu Raporu');
   };
 
   // Generate hourly data from REAL orders only
@@ -297,102 +290,9 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* Termal yazici fis formati */}
-            <div ref={receiptRef} className="p-5 max-h-[70vh] overflow-y-auto">
-              <div style={{ fontFamily: "'Courier New', monospace", fontSize: 12, lineHeight: 1.6, color: '#000' }}>
-                <div style={{ textAlign: 'center', marginBottom: 8 }}>
-                  <div style={{ fontSize: 18, fontWeight: 'bold' }}>{restaurantName || 'RESTORAN'}</div>
-                  <div style={{ fontSize: 10, color: '#666', marginTop: 2 }}>GUN SONU RAPORU</div>
-                </div>
-
-                <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Tarih:</span>
-                  <span style={{ fontWeight: 'bold' }}>{shortDate}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Saat:</span>
-                  <span style={{ fontWeight: 'bold' }}>{new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</span>
-                </div>
-                {staffName && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Kapatan:</span>
-                    <span style={{ fontWeight: 'bold' }}>{staffName}</span>
-                  </div>
-                )}
-
-                <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: 14 }}>
-                  <span>TOPLAM CIRO</span>
-                  <span>{fmt(stats.totalRevenue)}</span>
-                </div>
-
-                <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-
-                <div style={{ fontWeight: 'bold', marginBottom: 2 }}>ODEME DETAYI</div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Nakit:</span>
-                  <span>{fmt(stats.cashPayments)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Kredi Karti:</span>
-                  <span>{fmt(stats.cardPayments)}</span>
-                </div>
-
-                <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-
-                <div style={{ fontWeight: 'bold', marginBottom: 2 }}>SATIS ADETLERI</div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Toplam Siparis:</span>
-                  <span style={{ fontWeight: 'bold' }}>{stats.totalOrders} adet</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Nakit Islem:</span>
-                  <span>{orders.filter(o => (o.payments || []).some(p => p.method === 'nakit')).length} adet</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Kart Islem:</span>
-                  <span>{orders.filter(o => (o.payments || []).some(p => p.method === 'kredi_karti')).length} adet</span>
-                </div>
-
-                {stats.topSelling.length > 0 && (
-                  <>
-                    <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-                    <div style={{ fontWeight: 'bold', marginBottom: 2 }}>EN COK SATILAN</div>
-                    {stats.topSelling.map((p, i) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>{i + 1}. {p.name}</span>
-                        <span>{p.count} ad.</span>
-                      </div>
-                    ))}
-                  </>
-                )}
-
-                <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-
-                <div style={{ fontWeight: 'bold', marginBottom: 2 }}>MASA DURUMU</div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Bos:</span>
-                  <span>{stats.availableTables}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Dolu:</span>
-                  <span>{stats.activeTables}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Odeme Bekliyor:</span>
-                  <span>{tables.filter(t => t.status === 'odeme_bekliyor').length}</span>
-                </div>
-
-                <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }} />
-
-                <div style={{ textAlign: 'center', fontSize: 10, color: '#666' }}>
-                  <div>--- GUN SONU ---</div>
-                  <div style={{ marginTop: 4 }}>Bu fis otomatik olusturulmustur</div>
-                </div>
-              </div>
+            {/* Termal yazici fis formati - text preview */}
+            <div className="p-5 max-h-[70vh] overflow-y-auto">
+              <pre style={{ fontFamily: "'Courier New', monospace", fontSize: 11, lineHeight: 1.5, color: '#000', whiteSpace: 'pre-wrap' }}>{formatGunSonu(buildGunSonuData())}</pre>
             </div>
 
             <div className="px-5 pb-5 flex gap-2">

@@ -2,9 +2,10 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { usePOS } from '@/context/POSContext';
 import { useAuth } from '@/context/AuthContext';
 import { OrderItem, Table, MenuItem, OrderItemModifier, Payment } from '@/types/pos';
-import { ArrowLeft, Minus, Plus, Send, Trash2, X, CreditCard, Banknote, Search, SplitSquareHorizontal, Clock, Edit3, MessageSquare, AlertTriangle, Users, Receipt, LogOut } from 'lucide-react';
+import { ArrowLeft, Minus, Plus, Send, Trash2, X, CreditCard, Banknote, Search, SplitSquareHorizontal, Clock, Edit3, MessageSquare, AlertTriangle, Users, Receipt, LogOut, Printer } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { formatAdisyon, formatKitchenTicket, printReceipt } from '@/lib/receipt';
 
 function formatDuration(openedAt?: Date) {
   if (!openedAt) return '';
@@ -197,6 +198,22 @@ export default function GarsonPOS() {
     setTableTotal(selectedTable.id, total);
     setOrderItems(prev => prev.map(i => ({ ...i, sentToKitchen: true })));
     toast.success('Sipariş mutfağa gönderildi!');
+
+    // Print kitchen ticket
+    printReceipt(
+      formatKitchenTicket({
+        tableName: selectedTable.name,
+        staffName: staffName || '',
+        date: new Date(),
+        items: newItems.map(i => ({
+          name: i.menuItem.name,
+          qty: i.quantity,
+          modifiers: i.modifiers.map(m => m.optionName),
+          note: i.note,
+        })),
+      }),
+      'Mutfak'
+    );
   };
 
   const clearOrder = () => {
@@ -293,6 +310,26 @@ export default function GarsonPOS() {
     toast.success(`${amount} ₺ ön ödeme alındı`);
   };
 
+  const printAdisyon = () => {
+    if (!selectedTable || orderItems.length === 0) return;
+    const items = orderItems.map(i => ({
+      name: i.menuItem.name,
+      qty: i.quantity,
+      unitPrice: i.menuItem.price + i.modifiers.reduce((s, m) => s + m.extraPrice, 0),
+    }));
+    printReceipt(
+      formatAdisyon({
+        restaurantName: 'RESTORAN',
+        tableName: selectedTable.name,
+        staffName: staffName || '',
+        date: new Date(),
+        items,
+        total,
+      }),
+      'Adisyon'
+    );
+  };
+
   const tableStatusColor = (status: string) => {
     switch (status) {
       case 'bos': return 'bg-pos-success';
@@ -328,6 +365,9 @@ export default function GarsonPOS() {
               </span>
             )}
             <span className="px-3 py-1 rounded-lg bg-primary/10 text-primary font-bold text-sm">{selectedTable.name}</span>
+            <button onClick={printAdisyon} className="p-2 rounded-lg hover:bg-muted pos-btn" title="Adisyon Yazdir">
+              <Printer className="w-4 h-4" />
+            </button>
           </div>
         )}
         {!selectedTable && (
