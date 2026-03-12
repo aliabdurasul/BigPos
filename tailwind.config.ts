@@ -104,6 +104,7 @@ export default {
         "slide-in": "slide-in 0.15s ease-out",
         "slide-up": "slide-up 0.15s ease-out",
         "fade-in": "fade-in 0.1s ease-out",
+        "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
       },
     },
   },

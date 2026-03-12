@@ -140,7 +140,7 @@ export default function RestoranAdmin() {
   const handleAddTable = async () => {
     if (!newTableName) return;
     try {
-      await addTable({ name: newTableName, status: 'bos', floor: newTableFloor });
+      await addTable({ name: newTableName, status: 'available', floor: newTableFloor });
       setNewTableName('');
       toast.success('Masa eklendi');
     } catch (err: unknown) {
@@ -396,7 +396,7 @@ export default function RestoranAdmin() {
                 {tables.map(t => (
                   <div key={t.id} className="flex items-center justify-between p-4 bg-card rounded-xl border">
                     <div className="flex items-center gap-2">
-                      <span className={`w-3 h-3 rounded-full ${t.status === 'bos' ? 'bg-pos-success' : t.status === 'dolu' ? 'bg-pos-danger' : 'bg-pos-warning'}`} />
+                      <span className={`w-3 h-3 rounded-full ${t.status === 'available' ? 'bg-pos-success' : t.status === 'waiting_payment' ? 'bg-pos-warning' : 'bg-pos-danger'}`} />
                       <div>
                         <span className="font-bold text-sm">{t.name}</span>
                         <p className="text-[10px] text-muted-foreground">{t.floor}</p>
@@ -568,6 +568,7 @@ export default function RestoranAdmin() {
                 <select value={staffForm.role} onChange={e => setStaffForm(p => ({ ...p, role: e.target.value }))} className="w-full px-4 py-3 rounded-xl border bg-card text-sm mt-1">
                   <option value="garson">Garson</option>
                   <option value="mutfak">Mutfak</option>
+                  <option value="cashier">Kasa</option>
                   <option value="manager">Manager</option>
                 </select>
               </div>

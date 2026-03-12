@@ -123,7 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         type: 'staff',
         staffId: staff.id,
         name: staff.name,
-        role: staff.role as 'garson' | 'mutfak' | 'manager',
+        role: staff.role as 'garson' | 'mutfak' | 'manager' | 'cashier',
         restaurantId,
         slug,
       };

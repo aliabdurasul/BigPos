@@ -31,12 +31,10 @@ interface POSContextType {
   addPayment: (orderId: string, payment: Payment) => void;
   modifierGroups: ModifierGroup[];
   floors: string[];
-  // Staff management (admin CRUD)
   staff: Staff[];
   addStaff: (s: Omit<Staff, 'id'>) => Promise<void>;
   removeStaff: (id: string) => Promise<void>;
   updateStaff: (id: string, updates: Partial<Staff>) => Promise<void>;
-  // Admin CRUD
   addCategory: (cat: Omit<Category, 'id'>) => Promise<void>;
   removeCategory: (id: string) => Promise<void>;
   addMenuItem: (item: Omit<MenuItem, 'id'>) => Promise<void>;
@@ -44,22 +42,19 @@ interface POSContextType {
   removeMenuItem: (id: string) => Promise<void>;
   addTable: (table: Omit<Table, 'id'>) => Promise<void>;
   removeTable: (id: string) => Promise<void>;
-  // Floor CRUD
   addFloor: (name: string) => Promise<void>;
   removeFloor: (name: string) => Promise<void>;
-  // Daily closure
   closeDailyReport: (data: Omit<DailyClosure, 'id'>) => Promise<void>;
-  // Product-modifier mapping
   productModifierMap: Map<string, string[]>;
   setProductModifiers: (menuItemId: string, groupIds: string[]) => void;
-  // Modifier CRUD
   addModifierGroup: (group: { name: string; type: 'checkbox' | 'radio' }) => Promise<string>;
   updateModifierGroup: (id: string, updates: { name?: string; type?: 'checkbox' | 'radio' }) => Promise<void>;
   removeModifierGroup: (id: string) => Promise<void>;
   addModifierOption: (groupId: string, option: { name: string; extraPrice: number }) => Promise<string>;
   updateModifierOption: (id: string, groupId: string, updates: { name?: string; extraPrice?: number }) => Promise<void>;
   removeModifierOption: (id: string, groupId: string) => Promise<void>;
-  // Refetch
+  markOrderReady: (orderId: string) => Promise<void>;
+  completePayment: (orderId: string, amount: number, method: string, staffId?: string, discountAmount?: number, discountReason?: string) => Promise<void>;
   refetchOrders: () => Promise<void>;
 }
 
@@ -113,6 +108,7 @@ function mapOrderItem(row: Record<string, unknown>): OrderItem {
     modifiers: (row.modifiers as OrderItem['modifiers']) || [],
     note: (row.note as string) || undefined,
     sentToKitchen: (row.sent_to_kitchen as boolean) ?? true,
+    status: (row.status as OrderItem['status']) || 'pending',
   };
 }
 
@@ -123,6 +119,9 @@ function mapPayment(row: Record<string, unknown>): Payment {
     amount: Number(row.amount),
     method: row.method as Payment['method'],
     createdAt: new Date(row.created_at as string),
+    staffId: (row.staff_id as string) || undefined,
+    discountAmount: row.discount_amount ? Number(row.discount_amount) : undefined,
+    discountReason: (row.discount_reason as string) || undefined,
   };
 }
 
@@ -148,11 +147,14 @@ function mapStaff(row: Record<string, unknown>): Staff {
     id: row.id as string,
     restaurantId: row.restaurant_id as string,
     name: row.name as string,
-    role: row.role as UserRole,
+    role: row.role as Staff['role'],
     pin: row.pin as string,
     active: row.active as boolean,
   };
 }
+
+// Active statuses that should be fetched (not terminal)
+const ACTIVE_ORDER_STATUSES = ['created', 'sent_to_kitchen', 'preparing', 'ready', 'waiting_payment'];
 
 // ─── Provider ─────────────────────────────────────
 
@@ -189,6 +191,9 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
         const rid = restaurantId;
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
+
+        const statusFilter = ACTIVE_ORDER_STATUSES.map(s => `status.eq.${s}`).join(',');
+
         const [
           { data: floorsData },
           { data: catData },
@@ -207,9 +212,9 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
           supabase.from('menu_items').select('*').eq('restaurant_id', rid).eq('active', true),
           supabase.from('tables').select('*').eq('restaurant_id', rid),
           supabase.from('modifier_groups').select('*, modifier_options(*)').eq('restaurant_id', rid).order('sort_order'),
-          supabase.from('orders').select('*').eq('restaurant_id', rid).or(`status.neq.tamamlandi,created_at.gte.${todayStart.toISOString()}`),
-          supabase.from('order_items').select('*'),
-          supabase.from('payments').select('*'),
+          supabase.from('orders').select('*').eq('restaurant_id', rid).or(`${statusFilter},created_at.gte.${todayStart.toISOString()}`),
+          supabase.from('order_items').select('*').eq('restaurant_id', rid),
+          supabase.from('payments').select('*').eq('restaurant_id', rid),
           supabase.from('staff').select('*').eq('restaurant_id', rid).eq('active', true),
           supabase.from('product_modifier_groups').select('*'),
           supabase.from('restaurants').select('name').eq('id', rid).single(),
@@ -217,10 +222,8 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
 
         if (cancelled) return;
 
-        // Restaurant name
         if (restData) setRestaurantName((restData as { name: string }).name);
 
-        // Floors
         const fMap = new Map<string, string>();
         const rMap = new Map<string, string>();
         (floorsData || []).forEach((f: Record<string, unknown>) => {
@@ -236,7 +239,6 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
         setTables((tableData || []).map((t: Record<string, unknown>) => mapTable(t, fMap)));
         setModifierGroups((modData || []).map(mapModifierGroup));
 
-        // Group order items & payments by order
         const itemsByOrder = new Map<string, OrderItem[]>();
         (orderItemsData || []).forEach((oi: Record<string, unknown>) => {
           const orderId = oi.order_id as string;
@@ -267,10 +269,8 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
           staffId: (o.staff_id as string) || undefined,
         })));
 
-        // Staff
         setStaff((staffData || []).map(mapStaff));
 
-        // Product-modifier group mapping
         const pmMap = new Map<string, string[]>();
         (pmgData || []).forEach((row: Record<string, unknown>) => {
           const itemId = row.menu_item_id as string;
@@ -297,10 +297,11 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
     const rid = restaurantId;
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
+    const statusFilter = ACTIVE_ORDER_STATUSES.map(s => `status.eq.${s}`).join(',');
     const [{ data: ordersData }, { data: orderItemsData }, { data: paymentsData }] = await Promise.all([
-      supabase.from('orders').select('*').eq('restaurant_id', rid).or(`status.neq.tamamlandi,created_at.gte.${todayStart.toISOString()}`),
-      supabase.from('order_items').select('*'),
-      supabase.from('payments').select('*'),
+      supabase.from('orders').select('*').eq('restaurant_id', rid).or(`${statusFilter},created_at.gte.${todayStart.toISOString()}`),
+      supabase.from('order_items').select('*').eq('restaurant_id', rid),
+      supabase.from('payments').select('*').eq('restaurant_id', rid),
     ]);
     const itemsByOrder = new Map<string, OrderItem[]>();
     (orderItemsData || []).forEach((oi: Record<string, unknown>) => {
@@ -331,10 +332,10 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
     })));
   }, [restaurantId]);
 
-  // ─── Polling Fallback (every 30s) ──────────────
+  // ─── Polling Fallback ──────────────────────────
 
   useEffect(() => {
-    const interval = setInterval(refetchOrders, 30000);
+    const interval = setInterval(refetchOrders, 15000);
     return () => clearInterval(interval);
   }, [refetchOrders]);
 
@@ -404,7 +405,7 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
           setOrders(prev => prev.filter(o => o.id !== payload.old.id));
         }
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'order_items' }, (payload) => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'order_items', filter: `restaurant_id=eq.${restaurantId}` }, (payload) => {
         const newItem = mapOrderItem(payload.new);
         setOrders(prev => prev.map(o => {
           if (o.id !== payload.new.order_id) return o;
@@ -412,7 +413,7 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
           return { ...o, items: [...o.items, newItem] };
         }));
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'payments' }, (payload) => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'payments', filter: `restaurant_id=eq.${restaurantId}` }, (payload) => {
         const newPayment = mapPayment(payload.new);
         setOrders(prev => prev.map(o => {
           if (o.id !== payload.new.order_id) return o;
@@ -466,6 +467,8 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
             modifiers: item.modifiers,
             note: item.note || null,
             sent_to_kitchen: true,
+            status: 'sent',
+            restaurant_id: restaurantId,
           }))
         );
         if (itemsErr) console.error('addOrder items error:', itemsErr);
@@ -502,7 +505,7 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
   }, []);
 
   const getTableOrders = useCallback((tableId: string) => {
-    return ordersRef.current.filter(o => o.tableId === tableId && o.status !== 'tamamlandi');
+    return ordersRef.current.filter(o => o.tableId === tableId && o.status !== 'paid' && o.status !== 'closed');
   }, []);
 
   // ─── Table Functions ───────────────────────────
@@ -510,11 +513,11 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
   const setTableStatus = useCallback((tableId: string, status: TableStatus) => {
     setTables(prev => prev.map(t => {
       if (t.id !== tableId) return t;
-      if (status === 'bos') return { ...t, status, openedAt: undefined, currentTotal: 0 };
+      if (status === 'available') return { ...t, status, openedAt: undefined, currentTotal: 0 };
       return { ...t, status };
     }));
     const dbUpdates: Record<string, unknown> = { status };
-    if (status === 'bos') { dbUpdates.opened_at = null; dbUpdates.current_total = 0; }
+    if (status === 'available') { dbUpdates.opened_at = null; dbUpdates.current_total = 0; }
     supabase.from('tables').update(dbUpdates).eq('id', tableId).then(({ error }) => {
       if (error) console.error('setTableStatus error:', error);
     });
@@ -529,12 +532,12 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
 
   const openTable = useCallback((tableId: string) => {
     setTables(prev => prev.map(t => {
-      if (t.id !== tableId || t.status !== 'bos') return t;
-      return { ...t, status: 'dolu' as TableStatus, openedAt: new Date() };
+      if (t.id !== tableId || t.status !== 'available') return t;
+      return { ...t, status: 'occupied' as TableStatus, openedAt: new Date() };
     }));
     supabase.from('tables')
-      .update({ status: 'dolu', opened_at: new Date().toISOString() })
-      .eq('id', tableId).eq('status', 'bos')
+      .update({ status: 'occupied', opened_at: new Date().toISOString() })
+      .eq('id', tableId).eq('status', 'available')
       .then(({ error }) => { if (error) console.error('openTable error:', error); });
   }, []);
 
@@ -548,9 +551,57 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
       return { ...o, payments: [...(o.payments || []), newPayment] };
     }));
     supabase.from('payments').insert({
-      id: paymentId, order_id: orderId, amount: payment.amount, method: payment.method,
+      id: paymentId, order_id: orderId, amount: payment.amount, method: payment.method, restaurant_id: restaurantId,
+      staff_id: payment.staffId || staffId || null,
+      discount_amount: payment.discountAmount || 0,
+      discount_reason: payment.discountReason || null,
     }).then(({ error }) => { if (error) console.error('addPayment error:', error); });
-  }, []);
+  }, [restaurantId, staffId]);
+
+  // ─── Atomic POS Operations (use DB RPCs) ──────
+
+  const markOrderReady = useCallback(async (orderId: string) => {
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'waiting_payment' as OrderStatus } : o));
+
+    const order = ordersRef.current.find(o => o.id === orderId);
+    if (order?.tableId) {
+      setTables(prev => prev.map(t => t.id === order.tableId ? { ...t, status: 'waiting_payment' as TableStatus } : t));
+    }
+
+    const { error } = await supabase.rpc('mark_order_ready', { p_order_id: orderId });
+    if (error) {
+      console.error('markOrderReady error:', error);
+      await refetchOrders();
+    }
+  }, [refetchOrders]);
+
+  const completePaymentFn = useCallback(async (
+    orderId: string, amount: number, method: string,
+    payStaffId?: string, discountAmount?: number, discountReason?: string
+  ) => {
+    const order = ordersRef.current.find(o => o.id === orderId);
+
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'paid' as OrderStatus } : o));
+    if (order?.tableId) {
+      setTables(prev => prev.map(t => t.id === order.tableId
+        ? { ...t, status: 'available' as TableStatus, currentTotal: 0, openedAt: undefined }
+        : t
+      ));
+    }
+
+    const { error } = await supabase.rpc('complete_payment', {
+      p_order_id: orderId,
+      p_amount: amount,
+      p_method: method,
+      p_staff_id: payStaffId || staffId || null,
+      p_discount_amount: discountAmount || 0,
+      p_discount_reason: discountReason || null,
+    });
+    if (error) {
+      console.error('completePayment error:', error);
+      await refetchOrders();
+    }
+  }, [staffId, refetchOrders]);
 
   // ─── Admin CRUD Helpers ────────────────────────
 
@@ -699,7 +750,6 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
       next.set(menuItemId, groupIds);
       return next;
     });
-    // Sync to DB: delete old, insert new
     (async () => {
       await supabase.from('product_modifier_groups').delete().eq('menu_item_id', menuItemId);
       if (groupIds.length > 0) {
@@ -796,6 +846,7 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
       productModifierMap, setProductModifiers,
       addModifierGroup, updateModifierGroup, removeModifierGroup,
       addModifierOption, updateModifierOption, removeModifierOption,
+      markOrderReady, completePayment: completePaymentFn,
       refetchOrders,
     }}>
       {loading ? (

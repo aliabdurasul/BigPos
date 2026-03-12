@@ -1,32 +1,42 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, memo } from 'react';
 import { usePOS } from '@/context/POSContext';
 import { useAuth } from '@/context/AuthContext';
 import { Order, OrderStatus } from '@/types/pos';
-import { ArrowLeft, Clock, ChefHat, LogOut } from 'lucide-react';
+import { Clock, ChefHat, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { playNotification } from '@/lib/sound';
 
-const columns: { status: OrderStatus; label: string; emoji: string; bgClass: string }[] = [
-  { status: 'yeni', label: 'Yeni Sipariş', emoji: '🔴', bgClass: 'border-pos-danger' },
-  { status: 'hazirlaniyor', label: 'Hazırlanıyor', emoji: '🟡', bgClass: 'border-pos-warning' },
-  { status: 'hazir', label: 'Hazır', emoji: '🟢', bgClass: 'border-pos-success' },
+const KITCHEN_COLUMNS: { status: OrderStatus; label: string; emoji: string; bgClass: string }[] = [
+  { status: 'sent_to_kitchen', label: 'Yeni Sipariş', emoji: '🔴', bgClass: 'border-pos-danger' },
+  { status: 'preparing', label: 'Hazırlanıyor', emoji: '🟡', bgClass: 'border-pos-warning' },
+  { status: 'ready', label: 'Hazır', emoji: '🟢', bgClass: 'border-pos-success' },
 ];
 
-function timeAgo(date: Date) {
+function useElapsedTime(date: Date) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 10000);
+    return () => clearInterval(interval);
+  }, []);
+
   const mins = Math.floor((Date.now() - new Date(date).getTime()) / 60000);
   if (mins < 1) return 'Az önce';
-  return `${mins} dk önce`;
+  return `${mins} dk`;
 }
 
-function OrderCard({ order, onStatusChange }: { order: Order; onStatusChange: (status: OrderStatus) => void }) {
-  const isUrgent = order.status === 'yeni' && (Date.now() - new Date(order.createdAt).getTime()) > 300000;
-  
+const OrderCard = memo(function OrderCard({ order, onStatusChange }: {
+  order: Order;
+  onStatusChange: (status: OrderStatus) => void;
+}) {
+  const elapsed = useElapsedTime(order.createdAt);
+  const isUrgent = order.status === 'sent_to_kitchen' && (Date.now() - new Date(order.createdAt).getTime()) > 300000;
+
   return (
     <div className={`bg-card rounded-2xl border-2 p-4 shadow-sm animate-slide-in ${isUrgent ? 'border-pos-danger ring-2 ring-pos-danger/20' : 'border-border'}`}>
       <div className="flex justify-between items-center mb-3">
         <h3 className="font-black text-xl">{order.tableName}</h3>
         <span className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${isUrgent ? 'bg-pos-danger/10 text-pos-danger' : 'bg-muted text-muted-foreground'}`}>
-          <Clock className="w-3 h-3" /> {timeAgo(order.createdAt)}
+          <Clock className="w-3 h-3" /> {elapsed}
         </span>
       </div>
       <ul className="space-y-1.5 mb-4">
@@ -48,17 +58,17 @@ function OrderCard({ order, onStatusChange }: { order: Order; onStatusChange: (s
         ))}
       </ul>
       <div className="flex gap-2">
-        {order.status === 'yeni' && (
+        {order.status === 'sent_to_kitchen' && (
           <button
-            onClick={() => onStatusChange('hazirlaniyor')}
+            onClick={() => onStatusChange('preparing')}
             className="flex-1 py-3 rounded-xl bg-pos-warning text-pos-warning-foreground font-bold text-sm pos-btn shadow-md"
           >
             🍳 Hazırlanıyor
           </button>
         )}
-        {order.status === 'hazirlaniyor' && (
+        {order.status === 'preparing' && (
           <button
-            onClick={() => onStatusChange('hazir')}
+            onClick={() => onStatusChange('ready')}
             className="flex-1 py-3 rounded-xl bg-pos-success text-pos-success-foreground font-bold text-sm pos-btn shadow-md"
           >
             ✅ Hazır
@@ -67,15 +77,19 @@ function OrderCard({ order, onStatusChange }: { order: Order; onStatusChange: (s
       </div>
     </div>
   );
-}
+});
 
 export default function MutfakEkrani() {
-  const { orders, updateOrderStatus, refetchOrders } = usePOS();
+  const { orders, updateOrderStatus, markOrderReady, refetchOrders } = usePOS();
   const { logout } = useAuth();
   const navigate = useNavigate();
-  const newCount = orders.filter(o => o.status === 'yeni').length;
 
-  // Audio notification when new orders arrive
+  const kitchenOrders = orders.filter(o =>
+    o.status === 'sent_to_kitchen' || o.status === 'preparing' || o.status === 'ready'
+  );
+
+  const newCount = kitchenOrders.filter(o => o.status === 'sent_to_kitchen').length;
+
   const prevNewCount = useRef(newCount);
   useEffect(() => {
     if (newCount > prevNewCount.current) {
@@ -84,7 +98,6 @@ export default function MutfakEkrani() {
     prevNewCount.current = newCount;
   }, [newCount]);
 
-  // Refetch orders when kitchen tab becomes visible (catches missed realtime events)
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === 'visible') refetchOrders();
@@ -92,6 +105,19 @@ export default function MutfakEkrani() {
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [refetchOrders]);
+
+  useEffect(() => {
+    const interval = setInterval(refetchOrders, 10000);
+    return () => clearInterval(interval);
+  }, [refetchOrders]);
+
+  const handleStatusChange = (orderId: string, newStatus: OrderStatus) => {
+    if (newStatus === 'ready') {
+      markOrderReady(orderId);
+    } else {
+      updateOrderStatus(orderId, newStatus);
+    }
+  };
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background">
@@ -109,8 +135,8 @@ export default function MutfakEkrani() {
       </header>
 
       <div className="flex-1 flex min-h-0 p-4 gap-4 overflow-x-auto">
-        {columns.map(col => {
-          const colOrders = orders.filter(o => o.status === col.status);
+        {KITCHEN_COLUMNS.map(col => {
+          const colOrders = kitchenOrders.filter(o => o.status === col.status);
           return (
             <div key={col.status} className="flex-1 min-w-[300px] flex flex-col">
               <h2 className={`text-sm font-black uppercase tracking-wider mb-3 pb-2 border-b-3 ${col.bgClass} flex items-center gap-2`}>
@@ -121,7 +147,11 @@ export default function MutfakEkrani() {
                   <p className="text-muted-foreground text-sm text-center mt-10">Sipariş yok</p>
                 ) : (
                   colOrders.map(order => (
-                    <OrderCard key={order.id} order={order} onStatusChange={(status) => updateOrderStatus(order.id, status)} />
+                    <OrderCard
+                      key={order.id}
+                      order={order}
+                      onStatusChange={(status) => handleStatusChange(order.id, status)}
+                    />
                   ))
                 )}
               </div>

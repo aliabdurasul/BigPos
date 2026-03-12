@@ -25,7 +25,7 @@ export default function AdminDashboard() {
     cardTransactions: orders.filter(o => (o.payments || []).some(p => p.method === 'kredi_karti')).length,
     emptyTables: stats.availableTables,
     occupiedTables: stats.activeTables,
-    waitingPaymentTables: tables.filter(t => t.status === 'odeme_bekliyor').length,
+    waitingPaymentTables: tables.filter(t => t.status === 'waiting_payment').length,
     topProducts: stats.topSelling,
   });
 
@@ -56,8 +56,8 @@ export default function AdminDashboard() {
     const cardPayments = orders.reduce((sum, o) =>
       sum + (o.payments || []).filter(p => p.method === 'kredi_karti').reduce((s, p) => s + p.amount, 0), 0);
 
-    const activeTables = tables.filter(t => t.status !== 'bos').length;
-    const availableTables = tables.filter(t => t.status === 'bos').length;
+    const activeTables = tables.filter(t => t.status !== 'available').length;
+    const availableTables = tables.filter(t => t.status === 'available').length;
 
     const productMap: Record<string, { name: string; count: number }> = {};
     orders.forEach(o => {
@@ -248,7 +248,7 @@ export default function AdminDashboard() {
               <p className="text-[10px] font-bold text-muted-foreground mt-1">Dolu</p>
             </div>
             <div className="text-center">
-              <p className="text-3xl font-black text-pos-warning">{tables.filter(t => t.status === 'odeme_bekliyor').length}</p>
+              <p className="text-3xl font-black text-pos-warning">{tables.filter(t => t.status === 'waiting_payment').length}</p>
               <p className="text-[10px] font-bold text-muted-foreground mt-1">Odeme Bekliyor</p>
             </div>
             {stats.avgTableMinutes > 0 && (

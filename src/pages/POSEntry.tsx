@@ -10,6 +10,8 @@ function getRolePath(slug: string, role: string): string {
       return `/pos/${slug}/tables`;
     case 'mutfak':
       return `/pos/${slug}/kitchen`;
+    case 'cashier':
+      return `/pos/${slug}/cashier`;
     case 'restoran_admin':
       return `/pos/${slug}/dashboard`;
     case 'super_admin':

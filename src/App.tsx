@@ -10,6 +10,7 @@ import POSEntry from "./pages/POSEntry";
 import AdminLogin from "./pages/AdminLogin";
 import StaffLogin from "./pages/StaffLogin";
 import GarsonPOS from "./pages/GarsonPOS";
+import CashierPOS from "./pages/CashierPOS";
 import MutfakEkrani from "./pages/MutfakEkrani";
 import RestoranAdmin from "./pages/RestoranAdmin";
 import SuperAdmin from "./pages/SuperAdmin";
@@ -17,7 +18,6 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-// Wraps POS pages in POSProvider using restaurantId + staffId from auth session
 function POSLayout({ children }: { children: React.ReactNode }) {
   const { session } = useAuth();
   const restaurantId = session?.restaurantId || '';
@@ -54,6 +54,11 @@ const App = () => (
             <Route path="/pos/:slug/tables" element={
               <ProtectedRoute allowedRoles={['garson', 'manager']}>
                 <POSLayout><GarsonPOS /></POSLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/pos/:slug/cashier" element={
+              <ProtectedRoute allowedRoles={['cashier', 'restoran_admin', 'manager']}>
+                <POSLayout><CashierPOS /></POSLayout>
               </ProtectedRoute>
             } />
             <Route path="/pos/:slug/kitchen" element={

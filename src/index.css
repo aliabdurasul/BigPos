@@ -78,7 +78,7 @@
 
 @layer utilities {
   .pos-touch-target {
-    @apply min-h-[52px] min-w-[52px];
+    @apply min-h-[64px] min-w-[64px];
   }
   .pos-panel {
     @apply bg-pos-panel rounded-xl shadow-sm border;
@@ -93,6 +93,12 @@
     @apply bg-muted-foreground/20 rounded-full;
   }
   .pos-btn {
-    @apply active:scale-[0.96] transition-all duration-100;
+    @apply active:scale-[0.96] transition-all duration-100 select-none;
+  }
+}
+
+@media (max-width: 640px) {
+  .pos-btn {
+    min-height: 48px;
   }
 }
