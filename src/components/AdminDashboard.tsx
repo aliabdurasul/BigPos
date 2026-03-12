@@ -13,25 +13,16 @@ export default function AdminDashboard() {
   const [showReceipt, setShowReceipt] = useState(false);
   const [closing, setClosing] = useState(false);
 
-  const buildGunSonuData = () => ({
-    restaurantName: restaurantName || 'RESTORAN',
-    date: new Date(),
-    closedBy: staffName || 'Bilinmiyor',
-    totalRevenue: stats.totalRevenue,
-    cashTotal: stats.cashPayments,
-    cardTotal: stats.cardPayments,
-    totalOrders: stats.totalOrders,
-    cashTransactions: todayOrders.filter(o => (o.payments || []).some(p => p.method === 'nakit')).length,
-    cardTransactions: todayOrders.filter(o => (o.payments || []).some(p => p.method === 'kredi_karti')).length,
-    emptyTables: stats.availableTables,
-    occupiedTables: stats.activeTables,
-    waitingPaymentTables: tables.filter(t => t.status === 'waiting_payment').length,
-    topProducts: stats.topSelling,
-  });
+  // #region agent log
+  console.log('[DEBUG-b1a753] AdminDashboard render start, orders:', orders.length);
+  fetch('http://127.0.0.1:7445/ingest/b8d5d89b-c3cc-4877-b1ec-68f838950bb8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b1a753'},body:JSON.stringify({sessionId:'b1a753',location:'AdminDashboard.tsx:16',message:'AdminDashboard render start',data:{ordersCount:orders.length},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
 
-  const handlePrint = () => {
-    printReceipt(formatGunSonu(buildGunSonuData()), 'Gun Sonu Raporu');
-  };
+  const todayOrders = useMemo(() => {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    return orders.filter(o => new Date(o.createdAt) >= todayStart);
+  }, [orders]);
 
   const hourlyData = useMemo(() => {
     const hours: Record<number, number> = {};
@@ -44,12 +35,6 @@ export default function AdminDashboard() {
       .map(([h, ciro]) => ({ saat: `${h.padStart(2, '0')}:00`, ciro }))
       .filter(d => d.ciro > 0);
   }, [todayOrders]);
-
-  const todayOrders = useMemo(() => {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    return orders.filter(o => new Date(o.createdAt) >= todayStart);
-  }, [orders]);
 
   const stats = useMemo(() => {
     const allPayments = todayOrders.flatMap(o => o.payments || []);
@@ -85,6 +70,26 @@ export default function AdminDashboard() {
 
     return { totalRevenue, totalOrders, cashPayments, cardPayments, splitPayments, discountPayments, otherPayments, activeTables, availableTables, topSelling, avgTableMinutes };
   }, [todayOrders, tables]);
+
+  const buildGunSonuData = () => ({
+    restaurantName: restaurantName || 'RESTORAN',
+    date: new Date(),
+    closedBy: staffName || 'Bilinmiyor',
+    totalRevenue: stats.totalRevenue,
+    cashTotal: stats.cashPayments,
+    cardTotal: stats.cardPayments,
+    totalOrders: stats.totalOrders,
+    cashTransactions: todayOrders.filter(o => (o.payments || []).some(p => p.method === 'nakit')).length,
+    cardTransactions: todayOrders.filter(o => (o.payments || []).some(p => p.method === 'kredi_karti')).length,
+    emptyTables: stats.availableTables,
+    occupiedTables: stats.activeTables,
+    waitingPaymentTables: tables.filter(t => t.status === 'waiting_payment').length,
+    topProducts: stats.topSelling,
+  });
+
+  const handlePrint = () => {
+    printReceipt(formatGunSonu(buildGunSonuData()), 'Gun Sonu Raporu');
+  };
 
   const today = new Date();
   const dateStr = today.toLocaleDateString('tr-TR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });

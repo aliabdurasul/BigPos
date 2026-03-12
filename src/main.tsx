@@ -3,6 +3,26 @@ import { supabaseConfigured } from "@/lib/supabase";
 import App from "./App.tsx";
 import "./index.css";
 
+// #region agent log
+window.onerror = function(msg, src, line, col, err) {
+  console.error('[DEBUG-b1a753] GLOBAL ERROR:', msg, 'at', src, line, col, err?.stack);
+  const d = document.getElementById('debug-b1a753-err');
+  if (d) d.textContent = `ERROR: ${msg}\nSource: ${src}:${line}:${col}\nStack: ${err?.stack || 'none'}`;
+  else {
+    const el = document.createElement('pre');
+    el.id = 'debug-b1a753-err';
+    el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:red;color:white;padding:16px;font-size:12px;white-space:pre-wrap;max-height:50vh;overflow:auto';
+    el.textContent = `ERROR: ${msg}\nSource: ${src}:${line}:${col}\nStack: ${err?.stack || 'none'}`;
+    document.body.appendChild(el);
+  }
+  fetch('http://127.0.0.1:7445/ingest/b8d5d89b-c3cc-4877-b1ec-68f838950bb8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b1a753'},body:JSON.stringify({sessionId:'b1a753',location:'main.tsx:onerror',message:'Global error caught',data:{msg:String(msg),src,line,col,stack:err?.stack},timestamp:Date.now(),hypothesisId:'GLOBAL'})}).catch(()=>{});
+};
+window.addEventListener('unhandledrejection', function(e) {
+  console.error('[DEBUG-b1a753] UNHANDLED REJECTION:', e.reason);
+});
+console.log('[DEBUG-b1a753] main.tsx loaded, supabaseConfigured:', supabaseConfigured);
+// #endregion
+
 const root = createRoot(document.getElementById("root")!);
 
 if (!supabaseConfigured) {
