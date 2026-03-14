@@ -118,38 +118,40 @@ const OrderCard = memo(function OrderCard({
     printReceipt(ticket, `Mutfak - ${order.tableName}`);
   };
 
+  const allNotes = order.items.filter(i => i.note).map(i => i.note as string);
+
   return (
     <div className={`bg-card rounded-xl border-2 overflow-hidden shadow-sm animate-slide-in ${isUrgent ? 'border-pos-danger ring-2 ring-pos-danger/20' : 'border-border'}`}>
-      {/* Header band */}
-      <div className={`px-4 py-2.5 flex items-center justify-between border-b ${isUrgent ? 'bg-pos-danger/10' : 'bg-muted/60'}`}>
-        <span className="font-black text-xl tracking-tight">{order.tableName}</span>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-mono text-muted-foreground">#{order.id.slice(-4).toUpperCase()}</span>
-          <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-semibold ${isUrgent ? 'bg-pos-danger/10 text-pos-danger' : 'bg-background text-muted-foreground border'}`}>
-            <Clock className="w-3 h-3" /> {elapsed}
+      {/* Header */}
+      <div className={`px-4 py-3 border-b ${isUrgent ? 'bg-pos-danger/10' : 'bg-muted/60'}`}>
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="font-black text-2xl tracking-tight leading-none">{order.tableName}</span>
+          <span className="text-xs font-mono text-muted-foreground shrink-0">#{order.id.slice(-4).toUpperCase()}</span>
+        </div>
+        <div className="flex justify-end mt-0.5">
+          <span className={`flex items-center gap-1 text-xs font-medium ${isUrgent ? 'text-pos-danger font-bold' : 'text-muted-foreground'}`}>
+            <Clock className="w-3 h-3" />{elapsed}
           </span>
         </div>
       </div>
 
-      {/* Items list */}
-      <div className="px-4 py-3 space-y-2 min-h-[48px]">
-        {order.items.length === 0 ? (
-          <p className="text-xs text-muted-foreground italic">Ürünler yükleniyor…</p>
-        ) : (
-          order.items.map(item => (
-            <div key={item.id}>
-              <div className="flex items-baseline gap-2">
-                <span className="text-sm font-black text-primary w-6 shrink-0">{item.quantity}x</span>
-                <span className="text-sm font-bold leading-tight">{item.menuItem.name}</span>
-              </div>
-              {item.modifiers.map((m, i) => (
-                <p key={i} className="text-xs text-muted-foreground ml-8">+ {m.optionName}</p>
-              ))}
-              {item.note && (
-                <p className="text-xs font-semibold text-pos-warning ml-8">⚠ {item.note}</p>
-              )}
-            </div>
-          ))
+      {/* Items */}
+      <div className="px-4 py-3 space-y-1.5">
+        {order.items.map(item => (
+          <div key={item.id}>
+            <p className="text-base font-bold leading-snug">
+              <span className="text-primary font-black inline-block w-8">{item.quantity}x</span>
+              {item.menuItem.name}
+            </p>
+            {item.modifiers.map((m, i) => (
+              <p key={i} className="text-xs text-muted-foreground ml-8">+ {m.optionName}</p>
+            ))}
+          </div>
+        ))}
+        {allNotes.length > 0 && (
+          <p className="text-sm font-bold text-pos-warning pt-1.5 border-t border-pos-warning/20 mt-1">
+            Not: {allNotes.join(', ')}
+          </p>
         )}
       </div>
 

@@ -101,20 +101,13 @@ export function formatKitchenTicket(data: KitchenTicketData): string {
   if (data.restaurantName) {
     lines.push(center(data.restaurantName.toUpperCase()));
   }
-  lines.push(center('MUTFAK FISi'));
-  lines.push(THICK);
 
-  // Masa + order number on same line
+  // Table name left, order # right on same line
   const orderTag = data.orderNumber ? `#${data.orderNumber}` : '';
-  const masaLabel = 'Masa  :';
-  const masaVal = data.tableName;
-  const tagPad = W - masaLabel.length - 1 - masaVal.length - orderTag.length;
-  lines.push(`${masaLabel} ${masaVal}${tagPad > 0 ? ' '.repeat(tagPad) : ' '}${orderTag}`);
+  lines.push(row(data.tableName, orderTag));
+  // Time right-aligned
+  lines.push(row('', fmtTime(data.date)));
 
-  lines.push(row('Saat  :', fmtTime(data.date)));
-  if (data.staffName) {
-    lines.push(row('Garson:', data.staffName));
-  }
   lines.push(SEP);
 
   for (const item of data.items) {
@@ -124,19 +117,18 @@ export function formatKitchenTicket(data: KitchenTicketData): string {
         lines.push(`    + ${mod}`);
       }
     }
-    if (item.note) {
-      lines.push(`    NOT: ${item.note}`);
-    }
+  }
+
+  // Aggregate all item notes + optional order note at the bottom
+  const allNotes: string[] = [];
+  if (data.orderNote) allNotes.push(data.orderNote);
+  data.items.forEach(i => { if (i.note) allNotes.push(i.note); });
+  if (allNotes.length > 0) {
+    lines.push('');
+    lines.push('Not: ' + allNotes.join(', '));
   }
 
   lines.push(SEP);
-
-  if (data.orderNote) {
-    lines.push('NOT:');
-    lines.push(data.orderNote);
-    lines.push(SEP);
-  }
-
   lines.push('');
   return lines.join('\n');
 }
