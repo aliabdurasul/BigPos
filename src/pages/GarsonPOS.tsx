@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { usePOS } from '@/context/POSContext';
 import { useAuth } from '@/context/AuthContext';
 import { OrderItem, Table, MenuItem, OrderItemModifier } from '@/types/pos';
@@ -56,10 +56,17 @@ export default function GarsonPOS() {
     return () => clearInterval(interval);
   }, []);
 
-  // Auto-reset when cashier completes payment — table becomes 'available' via realtime
+  // Auto-reset when cashier completes payment — table TRANSITIONS to 'available' via realtime.
+  // The ref tracks the previous status so we only reset on a STATUS CHANGE to 'available',
+  // not when the waiter first selects a table that is already 'available'.
   const currentTableInContext = selectedTable ? tables.find(t => t.id === selectedTable.id) : undefined;
+  const prevTableStatusRef = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (selectedTable && currentTableInContext?.status === 'available') {
+    const curr = currentTableInContext?.status;
+    const prev = prevTableStatusRef.current;
+    prevTableStatusRef.current = curr;
+    // Only fire if we were tracking a non-available state and it just became available
+    if (selectedTable && curr === 'available' && prev !== undefined && prev !== 'available') {
       setSelectedTable(null);
       setOrderItems([]);
       if (isMobile) setMobileTab('tables');
