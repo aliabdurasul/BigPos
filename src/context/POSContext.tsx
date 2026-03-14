@@ -209,14 +209,14 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
         const statusFilter = ACTIVE_ORDER_STATUSES.map(s => `status.eq.${s}`).join(',');
 
         const [
-          { data: floorsData },
-          { data: catData },
-          { data: itemData },
-          { data: tableData },
-          { data: modData },
-          { data: ordersData },
-          { data: paymentsData },
-          { data: staffData },
+          { data: floorsData, error: floorsErr },
+          { data: catData, error: catErr },
+          { data: itemData, error: itemErr },
+          { data: tableData, error: tableErr },
+          { data: modData, error: modErr },
+          { data: ordersData, error: ordersErr },
+          { data: paymentsData, error: paymentsErr },
+          { data: staffData, error: staffErr },
           { data: pmgData },
           { data: restData },
         ] = await Promise.all([
@@ -231,6 +231,15 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
           supabase.from('product_modifier_groups').select('*'),
           supabase.from('restaurants').select('name').eq('id', rid).single(),
         ]);
+
+        if (floorsErr)   console.error('[fetchAll] floors error — migration may not be applied:', floorsErr.message);
+        if (catErr)      console.error('[fetchAll] categories error — migration may not be applied:', catErr.message);
+        if (itemErr)     console.error('[fetchAll] menu_items error — migration may not be applied:', itemErr.message);
+        if (tableErr)    console.error('[fetchAll] tables error — migration may not be applied:', tableErr.message);
+        if (modErr)      console.error('[fetchAll] modifier_groups error:', modErr.message);
+        if (ordersErr)   console.error('[fetchAll] orders error — migration may not be applied:', ordersErr.message);
+        if (paymentsErr) console.error('[fetchAll] payments error:', paymentsErr.message);
+        if (staffErr)    console.error('[fetchAll] staff error:', staffErr.message);
 
         const orderIds = (ordersData || []).map((o: Record<string, unknown>) => o.id as string);
         const { data: orderItemsData, error: itemsErr } = orderIds.length > 0
@@ -594,17 +603,20 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
         }))
       );
       if (itemsErr) {
-        // Migration may not have been applied — retry with minimal columns that always exist
-        console.warn('addOrder items full insert failed, retrying minimal:', itemsErr.message);
+        // Retry without restaurant_id/status (for databases where migration_complete_fix hasn't been applied)
+        console.warn('addOrder items full insert failed, retrying without optional columns:', itemsErr.message);
         const { error: retryErr } = await supabase.from('order_items').insert(
           itemsWithIds.map(item => ({
             id: item.id,
             order_id: orderId,
             menu_item_id: item.menuItem.id || null,
+            menu_item_name: item.menuItem.name,   // NOT NULL in all schema versions
+            menu_item_price: item.menuItem.price, // NOT NULL in all schema versions
             quantity: item.quantity,
             modifiers: item.modifiers,
             note: item.note || null,
             sent_to_kitchen: true,
+            // restaurant_id and status omitted — may not exist in old schema
           }))
         );
         if (retryErr) console.error('addOrder items retry error:', retryErr.message);
