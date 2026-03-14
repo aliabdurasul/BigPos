@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+﻿import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import {
   Category, MenuItem, Table, Order, OrderItem, OrderStatus,
@@ -20,7 +20,7 @@ interface POSContextType {
   tables: Table[];
   setTables: React.Dispatch<React.SetStateAction<Table[]>>;
   orders: Order[];
-  addOrder: (order: Order) => void;
+  addOrder: (order: Order) => Promise<{ success: boolean; error?: string }>;
   updateOrder: (orderId: string, updates: Partial<Order>) => void;
   updateOrderStatus: (orderId: string, status: OrderStatus) => void;
   removeOrder: (orderId: string) => void;
@@ -210,7 +210,6 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
           { data: tableData },
           { data: modData },
           { data: ordersData },
-          { data: orderItemsData },
           { data: paymentsData },
           { data: staffData },
           { data: pmgData },
@@ -222,12 +221,17 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
           supabase.from('tables').select('*').eq('restaurant_id', rid),
           supabase.from('modifier_groups').select('*, modifier_options(*)').eq('restaurant_id', rid).order('sort_order'),
           supabase.from('orders').select('*').eq('restaurant_id', rid).or(`${statusFilter},created_at.gte.${todayStart.toISOString()}`),
-          supabase.from('order_items').select('*').eq('restaurant_id', rid),
           supabase.from('payments').select('*').eq('restaurant_id', rid),
           supabase.from('staff').select('*').eq('restaurant_id', rid).eq('active', true),
           supabase.from('product_modifier_groups').select('*'),
           supabase.from('restaurants').select('name').eq('id', rid).single(),
         ]);
+
+        // Fetch order_items by order ID to avoid restaurant_id column dependency
+        const orderIds = (ordersData || []).map((o: Record<string, unknown>) => o.id as string);
+        const { data: orderItemsData } = orderIds.length > 0
+          ? await supabase.from('order_items').select('*').in('order_id', orderIds)
+          : { data: [] as Record<string, unknown>[] };
 
         if (cancelled) return;
 
@@ -309,11 +313,15 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const statusFilter = ACTIVE_ORDER_STATUSES.map(s => `status.eq.${s}`).join(',');
-    const [{ data: ordersData }, { data: orderItemsData }, { data: paymentsData }] = await Promise.all([
+    const [{ data: ordersData }, { data: paymentsData }] = await Promise.all([
       supabase.from('orders').select('*').eq('restaurant_id', rid).or(`${statusFilter},created_at.gte.${todayStart.toISOString()}`),
-      supabase.from('order_items').select('*').eq('restaurant_id', rid),
       supabase.from('payments').select('*').eq('restaurant_id', rid),
     ]);
+    // Fetch order_items by order ID to avoid restaurant_id column dependency
+    const orderIds = (ordersData || []).map((o: Record<string, unknown>) => o.id as string);
+    const { data: orderItemsData } = orderIds.length > 0
+      ? await supabase.from('order_items').select('*').in('order_id', orderIds)
+      : { data: [] as Record<string, unknown>[] };
     const itemsByOrder = new Map<string, OrderItem[]>();
     (orderItemsData || []).forEach((oi: Record<string, unknown>) => {
       const oid = oi.order_id as string;
@@ -523,45 +531,51 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
 
   // ─── Order Functions ───────────────────────────
 
-  const addOrder = useCallback((order: Order) => {
+  const addOrder = useCallback(async (order: Order): Promise<{ success: boolean; error?: string }> => {
     const orderId = crypto.randomUUID();
     const itemsWithIds = order.items.map(item => ({ ...item, id: crypto.randomUUID() }));
     const newOrder: Order = { ...order, id: orderId, items: itemsWithIds };
 
+    // Optimistic update -- rolled back on DB failure
     setOrders(prev => [...prev, newOrder]);
 
-    (async () => {
-      const { error } = await supabase.from('orders').insert({
-        id: orderId,
-        table_id: order.tableId,
-        table_name: order.tableName,
-        status: order.status,
-        total: order.total,
-        prepayment: order.prepayment || 0,
-        restaurant_id: restaurantId,
-        staff_id: staffId || null,
-      });
-      if (error) { console.error('addOrder error:', error); return; }
+    const { error } = await supabase.from('orders').insert({
+      id: orderId,
+      table_id: order.tableId,
+      table_name: order.tableName,
+      status: order.status,
+      total: order.total,
+      prepayment: order.prepayment || 0,
+      restaurant_id: restaurantId,
+      staff_id: staffId || null,
+    });
 
-      if (itemsWithIds.length > 0) {
-        const { error: itemsErr } = await supabase.from('order_items').insert(
-          itemsWithIds.map(item => ({
-            id: item.id,
-            order_id: orderId,
-            menu_item_id: item.menuItem.id || null,
-            menu_item_name: item.menuItem.name,
-            menu_item_price: item.menuItem.price,
-            quantity: item.quantity,
-            modifiers: item.modifiers,
-            note: item.note || null,
-            sent_to_kitchen: true,
-            status: 'sent',
-            restaurant_id: restaurantId,
-          }))
-        );
-        if (itemsErr) console.error('addOrder items error:', itemsErr);
-      }
-    })();
+    if (error) {
+      console.error('addOrder DB error:', error.message, error.code);
+      setOrders(prev => prev.filter(o => o.id !== orderId));
+      return { success: false, error: error.message };
+    }
+
+    if (itemsWithIds.length > 0) {
+      const { error: itemsErr } = await supabase.from('order_items').insert(
+        itemsWithIds.map(item => ({
+          id: item.id,
+          order_id: orderId,
+          menu_item_id: item.menuItem.id || null,
+          menu_item_name: item.menuItem.name,
+          menu_item_price: item.menuItem.price,
+          quantity: item.quantity,
+          modifiers: item.modifiers,
+          note: item.note || null,
+          sent_to_kitchen: true,
+          status: 'sent',
+          restaurant_id: restaurantId,
+        }))
+      );
+      if (itemsErr) console.error('addOrder items error:', itemsErr.message);
+    }
+
+    return { success: true };
   }, [restaurantId, staffId]);
 
   const updateOrder = useCallback((orderId: string, updates: Partial<Order>) => {
@@ -930,3 +944,5 @@ export function usePOS() {
   if (!ctx) throw new Error('usePOS must be used within POSProvider');
   return ctx;
 }
+
+

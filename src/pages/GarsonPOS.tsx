@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+﻿import { useState, useMemo, useCallback, useEffect } from 'react';
 import { usePOS } from '@/context/POSContext';
 import { useAuth } from '@/context/AuthContext';
 import { OrderItem, Table, MenuItem, OrderItemModifier } from '@/types/pos';
@@ -157,18 +157,18 @@ export default function GarsonPOS() {
     setEditNoteText('');
   };
 
-  const sendToKitchen = () => {
+  const sendToKitchen = async () => {
     if (!selectedTable || orderItems.length === 0) return;
     const newItems = orderItems.filter(i => !i.sentToKitchen);
     if (newItems.length === 0) {
-      toast.info('Tüm ürünler zaten mutfağa gönderildi');
+      toast.info('Tum urunler zaten mutfaga gonderildi');
       return;
     }
     const newItemsTotal = newItems.reduce((sum, i) => {
       const modExtra = i.modifiers.reduce((s, m) => s + m.extraPrice, 0);
       return sum + (i.menuItem.price + modExtra) * i.quantity;
     }, 0);
-    addOrder({
+    const result = await addOrder({
       id: Date.now().toString(),
       tableId: selectedTable.id,
       tableName: selectedTable.name,
@@ -177,10 +177,14 @@ export default function GarsonPOS() {
       createdAt: new Date(),
       total: newItemsTotal,
     });
+    if (!result.success) {
+      toast.error(`Siparis gonderilemedi: ${result.error || 'Veritabani hatasi. Lutfen tekrar deneyin.'}`);
+      return;
+    }
     openTable(selectedTable.id);
     setTableTotal(selectedTable.id, total);
     setOrderItems(prev => prev.map(i => ({ ...i, sentToKitchen: true })));
-    toast.success('Sipariş mutfağa gönderildi!');
+    toast.success('Siparis mutfaga gonderildi!');
     playSuccess();
   };
 
