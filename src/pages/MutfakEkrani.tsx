@@ -132,21 +132,25 @@ const OrderCard = memo(function OrderCard({
       </div>
 
       {/* Items list */}
-      <div className="px-4 py-3 space-y-2">
-        {order.items.map(item => (
-          <div key={item.id}>
-            <div className="flex items-baseline gap-2">
-              <span className="text-sm font-black text-primary w-6 shrink-0">{item.quantity}x</span>
-              <span className="text-sm font-bold leading-tight">{item.menuItem.name}</span>
+      <div className="px-4 py-3 space-y-2 min-h-[48px]">
+        {order.items.length === 0 ? (
+          <p className="text-xs text-muted-foreground italic">Ürünler yükleniyor…</p>
+        ) : (
+          order.items.map(item => (
+            <div key={item.id}>
+              <div className="flex items-baseline gap-2">
+                <span className="text-sm font-black text-primary w-6 shrink-0">{item.quantity}x</span>
+                <span className="text-sm font-bold leading-tight">{item.menuItem.name}</span>
+              </div>
+              {item.modifiers.map((m, i) => (
+                <p key={i} className="text-xs text-muted-foreground ml-8">+ {m.optionName}</p>
+              ))}
+              {item.note && (
+                <p className="text-xs font-semibold text-pos-warning ml-8">⚠ {item.note}</p>
+              )}
             </div>
-            {item.modifiers.map((m, i) => (
-              <p key={i} className="text-xs text-muted-foreground ml-8">+ {m.optionName}</p>
-            ))}
-            {item.note && (
-              <p className="text-xs font-semibold text-pos-warning ml-8">⚠ {item.note}</p>
-            )}
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       {/* Action buttons */}

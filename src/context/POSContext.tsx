@@ -447,6 +447,16 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
               prepayment: payload.new.prepayment ? Number(payload.new.prepayment) : undefined,
             }];
           });
+          // Immediately fetch items for this order — bypasses the restaurant_id filter
+          // on the order_items subscription which may not work if migration was not applied.
+          const orderId = payload.new.id as string;
+          supabase.from('order_items').select('*').eq('order_id', orderId).then(({ data }) => {
+            if (data && data.length > 0) {
+              const miLookup = menuItemsRef.current;
+              const items = (data as Record<string, unknown>[]).map(oi => mapOrderItem(oi, miLookup));
+              setOrders(prev => prev.map(o => o.id === orderId ? { ...o, items } : o));
+            }
+          });
         } else if (payload.eventType === 'UPDATE') {
           setOrders(prev => prev.map(o => {
             if (o.id !== payload.new.id) return o;

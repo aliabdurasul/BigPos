@@ -176,7 +176,11 @@ export default function PaymentScreen({
             }
           </p>
           {discountAmount > 0 && <p className="text-xs text-pos-warning font-semibold mt-1">İndirim: -{discountAmount} ₺</p>}
+          {totalPrepayment > 0 && <p className="text-xs text-blue-500 mt-1 font-semibold">Ön Ödeme: -{totalPrepayment} ₺</p>}
           {totalPaid > 0 && <p className="text-xs text-pos-success mt-1 font-semibold">Ödenen: {totalPaid} ₺</p>}
+          {(totalPrepayment > 0 || totalPaid > 0) && (
+            <p className="text-xs text-muted-foreground mt-0.5">Kalan: <span className="font-black text-foreground">{remainingAmount} ₺</span></p>
+          )}
         </div>
 
         <div className="overflow-y-auto flex-1 scrollbar-thin">
