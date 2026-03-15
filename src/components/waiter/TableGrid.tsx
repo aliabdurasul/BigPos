@@ -61,8 +61,8 @@ export default function TableGrid({ tables, orders, floors, selectedFloor, onSel
   );
 
   return (
-    <div className="flex-1 flex flex-col p-4">
-      <div className="flex gap-2 mb-4">
+    <div className="flex-1 flex flex-col p-4 min-h-0">
+      <div className="flex gap-2 mb-4 shrink-0">
         {floors.map(f => (
           <button
             key={f}
@@ -75,7 +75,7 @@ export default function TableGrid({ tables, orders, floors, selectedFloor, onSel
           </button>
         ))}
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 flex-1 content-start overflow-y-auto">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 flex-1 content-start overflow-y-auto scrollbar-thin">
         {floorTables.map(t => {
           const tOrders = orders.filter(o => o.tableId === t.id && o.status !== 'paid' && o.status !== 'closed');
           const tPrepay = tOrders.reduce((sum, o) => sum + (o.prepayment || 0), 0);
@@ -89,7 +89,7 @@ export default function TableGrid({ tables, orders, floors, selectedFloor, onSel
           );
         })}
       </div>
-      <div className="flex gap-4 mt-3 justify-center text-xs text-muted-foreground flex-wrap">
+      <div className="flex gap-4 mt-3 justify-center text-xs text-muted-foreground flex-wrap shrink-0">
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-pos-success" /> Boş</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Sipariş Var</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-pos-danger" /> Hazırlanıyor</span>
