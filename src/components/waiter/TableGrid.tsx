@@ -61,7 +61,7 @@ export default function TableGrid({ tables, orders, floors, selectedFloor, onSel
   );
 
   return (
-    <div className="flex-1 flex flex-col p-4">
+    <div className="flex flex-col h-full p-4 overflow-y-auto">
       <div className="flex gap-2 mb-4">
         {floors.map(f => (
           <button
@@ -75,7 +75,7 @@ export default function TableGrid({ tables, orders, floors, selectedFloor, onSel
           </button>
         ))}
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 flex-1 content-start overflow-y-auto">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 content-start pb-24">
         {floorTables.map(t => {
           const tOrders = orders.filter(o => o.tableId === t.id && o.status !== 'paid' && o.status !== 'closed');
           const tPrepay = tOrders.reduce((sum, o) => sum + (o.prepayment || 0), 0);
