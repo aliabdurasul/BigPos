@@ -5,7 +5,8 @@ import { OrderItem, Table, MenuItem, OrderItemModifier } from '@/types/pos';
 import { ArrowLeft, Clock, LogOut, AlertTriangle, LayoutGrid, UtensilsCrossed, ClipboardList } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { formatAdisyon, printReceipt } from '@/lib/receipt';
+import { formatAdisyon, formatKitchenTicket } from '@/lib/receipt';
+import { printToService } from '@/lib/printer';
 import { playSuccess } from '@/lib/sound';
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -30,7 +31,7 @@ export default function GarsonPOS() {
   const {
     tables, categories, menuItems, addOrder, getTableOrders,
     setTableTotal, openTable, modifierGroups, floors,
-    orders, restaurantName, productModifierMap,
+    orders, restaurantName, productModifierMap, markOrderReady,
   } = usePOS();
   const { session, logout } = useAuth();
   const staffName = session?.name || null;
@@ -224,6 +225,24 @@ export default function GarsonPOS() {
     }
     openTable(selectedTable.id);
     setTableTotal(selectedTable.id, total);
+
+    // Auto-print kitchen ticket (silent, no popup)
+    const kitchenContent = formatKitchenTicket({
+      tableName: selectedTable.name,
+      staffName: staffName || undefined,
+      date: new Date(),
+      items: newItems.map(i => ({
+        name: i.menuItem.name,
+        qty: i.quantity,
+        modifiers: i.modifiers.map(m => m.optionName + (m.extraPrice > 0 ? ` +${m.extraPrice}₺` : '')),
+        note: i.note,
+      })),
+      restaurantName: restaurantName || undefined,
+    });
+    printToService('kitchen', kitchenContent).then(r => {
+      if (!r.success) console.warn('[Kitchen Print]', r.error);
+    });
+
     toast.success('Siparis mutfaga gonderildi!');
     playSuccess();
     draftItemsRef.current.delete(selectedTable.id);
@@ -243,6 +262,25 @@ export default function GarsonPOS() {
     if (selectedTable) draftItemsRef.current.delete(selectedTable.id);
   };
 
+  const handleMarkReady = async () => {
+    if (!selectedTable) return;
+    const tableActiveOrders = orders.filter(o => o.tableId === selectedTable.id && o.status !== 'paid' && o.status !== 'closed');
+    if (tableActiveOrders.length === 0) {
+      toast.info('Bu masanın aktif siparişi yok');
+      return;
+    }
+    for (const order of tableActiveOrders) {
+      if (order.status === 'sent_to_kitchen' || order.status === 'preparing') {
+        await markOrderReady(order.id);
+      }
+    }
+    toast.success(`${selectedTable.name} — Sipariş hazır, ödeme bekleniyor`);
+    playSuccess();
+    setSelectedTable(null);
+    setOrderItems([]);
+    if (isMobile) setMobileTab('tables');
+  };
+
   const printAdisyon = () => {
     if (!selectedTable || orderItems.length === 0) return;
     const items = orderItems.map(i => ({
@@ -250,17 +288,15 @@ export default function GarsonPOS() {
       qty: i.quantity,
       unitPrice: i.menuItem.price + i.modifiers.reduce((s, m) => s + m.extraPrice, 0),
     }));
-    printReceipt(
-      formatAdisyon({
-        restaurantName: restaurantName || 'RESTORAN',
-        tableName: selectedTable.name,
-        staffName: staffName || '',
-        date: new Date(),
-        items,
-        total,
-      }),
-      'Adisyon'
-    );
+    const content = formatAdisyon({
+      restaurantName: restaurantName || 'RESTORAN',
+      tableName: selectedTable.name,
+      staffName: staffName || '',
+      date: new Date(),
+      items,
+      total,
+    });
+    printToService('receipt', content);
   };
 
   useEffect(() => {
@@ -358,6 +394,7 @@ export default function GarsonPOS() {
               onSendToKitchen={sendToKitchen}
               onClearOrder={clearOrder}
               onPrintAdisyon={printAdisyon}
+              onMarkReady={handleMarkReady}
               fullWidth
             />
           )}
@@ -488,6 +525,7 @@ export default function GarsonPOS() {
             onSendToKitchen={sendToKitchen}
             onClearOrder={clearOrder}
             onPrintAdisyon={printAdisyon}
+            onMarkReady={handleMarkReady}
           />
         )}
 

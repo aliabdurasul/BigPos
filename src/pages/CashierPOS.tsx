@@ -2,10 +2,12 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { usePOS } from '@/context/POSContext';
 import { useAuth } from '@/context/AuthContext';
 import { Table, Order, TABLE_STATUS_COLORS, TABLE_STATUS_BORDER_COLORS, TABLE_STATUS_LABELS } from '@/types/pos';
-import { ArrowLeft, LogOut, Clock, DollarSign } from 'lucide-react';
+import { ArrowLeft, LogOut, Clock, DollarSign, CheckCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { playSuccess } from '@/lib/sound';
+import { formatAdisyon } from '@/lib/receipt';
+import { printToService } from '@/lib/printer';
 import PaymentScreen from '@/components/cashier/PaymentScreen';
 
 function formatDuration(openedAt?: Date) {
@@ -20,7 +22,7 @@ function formatDuration(openedAt?: Date) {
 export default function CashierPOS() {
   const {
     tables, orders, floors, restaurantName, completePayment,
-    recordPrepayment, payOrderItems, staffId,
+    recordPrepayment, payOrderItems, staffId, markOrderReady,
   } = usePOS();
   const { session, logout } = useAuth();
   const staffName = session?.name || null;
@@ -63,9 +65,29 @@ export default function CashierPOS() {
   };
 
   const handleCompletePayment = async (amount: number, method: string, discountAmount?: number, discountReason?: string) => {
-    if (!selectedOrder) return;
+    if (!selectedOrder || !selectedTable) return;
     try {
       await completePayment(selectedOrder.id, amount, method, staffId || undefined, discountAmount, discountReason);
+
+      // Auto-print receipt to cashier printer (silent)
+      const receiptContent = formatAdisyon({
+        restaurantName: restaurantName || 'RESTORAN',
+        tableName: selectedTable.name,
+        staffName: staffName || '',
+        date: new Date(),
+        items: selectedOrder.items.map(i => ({
+          name: i.menuItem.name,
+          qty: i.quantity,
+          unitPrice: i.menuItem.price + i.modifiers.reduce((s, m) => s + m.extraPrice, 0),
+        })),
+        total: amount + (discountAmount || 0),
+        paymentMethod: method === 'nakit' ? 'Nakit' : method === 'kredi_karti' ? 'Kredi Karti' : 'Bolunmus',
+        paidAmount: amount,
+      });
+      printToService('receipt', receiptContent).then(r => {
+        if (!r.success) console.warn('[Receipt Print]', r.error);
+      });
+
       toast.success(`${amount} ₺ ödeme tamamlandı — ${selectedTable?.name} kapatıldı`);
       playSuccess();
       setSelectedTable(null);
@@ -103,6 +125,18 @@ export default function CashierPOS() {
     }
     setSelectedTable(null);
     setSelectedOrder(null);
+  };
+
+  const handleMarkReady = async (tableId: string) => {
+    const tableActiveOrders = orders.filter(o => o.tableId === tableId && o.status !== 'paid' && o.status !== 'closed');
+    for (const order of tableActiveOrders) {
+      if (order.status === 'sent_to_kitchen' || order.status === 'preparing') {
+        await markOrderReady(order.id);
+      }
+    }
+    const tbl = tables.find(t => t.id === tableId);
+    toast.success(`${tbl?.name || 'Masa'} — Sipariş hazır, ödeme bekleniyor`);
+    playSuccess();
   };
 
   const waitingPaymentCount = tables.filter(t => t.status === 'waiting_payment').length;
@@ -156,13 +190,13 @@ export default function CashierPOS() {
             const hasAnyPayment = totalPaid > 0;
 
             return (
-              <button
-                key={t.id}
-                onClick={() => handleTableTap(t)}
-                className={`relative flex flex-col items-center justify-center p-4 rounded-2xl border-2 ${TABLE_STATUS_BORDER_COLORS[t.status]} bg-card pos-btn transition-all ${
-                  isWaiting ? 'hover:shadow-lg ring-2 ring-pos-warning/40' : hasOrder ? 'hover:shadow-md' : 'opacity-60'
-                }`}
-              >
+              <div key={t.id} className="flex flex-col gap-1">
+                <button
+                  onClick={() => handleTableTap(t)}
+                  className={`relative flex flex-col items-center justify-center p-4 rounded-2xl border-2 ${TABLE_STATUS_BORDER_COLORS[t.status]} bg-card pos-btn transition-all ${
+                    isWaiting ? 'hover:shadow-lg ring-2 ring-pos-warning/40' : hasOrder ? 'hover:shadow-md' : 'opacity-60'
+                  }`}
+                >
                 <span className={`absolute top-2 right-2 w-3 h-3 rounded-full ${TABLE_STATUS_COLORS[t.status]}`} />
                 <span className="text-2xl font-black text-foreground">{t.name.replace('Masa ', '')}</span>
                 <span className="text-xs text-muted-foreground mt-0.5">{t.name}</span>
@@ -190,6 +224,15 @@ export default function CashierPOS() {
                   </span>
                 )}
               </button>
+              {hasOrder && !isWaiting && (t.status === 'occupied' || t.status === 'preparing') && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleMarkReady(t.id); }}
+                  className="w-full py-1.5 rounded-xl bg-pos-success text-pos-success-foreground text-[11px] font-bold pos-btn flex items-center justify-center gap-1"
+                >
+                  <CheckCircle2 className="w-3 h-3" /> Sipariş Hazır
+                </button>
+              )}
+              </div>
             );
           })}
         </div>

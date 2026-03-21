@@ -1,5 +1,5 @@
 import { OrderItem, Table } from '@/types/pos';
-import { Minus, Plus, X, Send, Trash2, MessageSquare, Printer } from 'lucide-react';
+import { Minus, Plus, X, Send, Trash2, MessageSquare, Printer, CheckCircle2 } from 'lucide-react';
 
 interface OrderPanelProps {
   selectedTable: Table | null;
@@ -18,6 +18,7 @@ interface OrderPanelProps {
   onSendToKitchen: () => void;
   onClearOrder: () => void;
   onPrintAdisyon: () => void;
+  onMarkReady?: () => void;
   fullWidth?: boolean;
 }
 
@@ -25,7 +26,7 @@ export default function OrderPanel({
   selectedTable, orderItems, total, totalPaid, totalPrepayment, remainingAmount,
   editNoteId, editNoteText,
   onUpdateQty, onRemoveItem, onEditNote, onSaveNote, onEditNoteTextChange,
-  onSendToKitchen, onClearOrder, onPrintAdisyon,
+  onSendToKitchen, onClearOrder, onPrintAdisyon, onMarkReady,
   fullWidth,
 }: OrderPanelProps) {
   return (
@@ -136,6 +137,14 @@ export default function OrderPanel({
         >
           <Send className="w-5 h-5" /> Mutfağa Gönder
         </button>
+        {onMarkReady && orderItems.some(i => i.sentToKitchen) && (
+          <button
+            onClick={onMarkReady}
+            className="w-full py-3 rounded-xl bg-pos-success text-pos-success-foreground font-bold text-sm flex items-center justify-center gap-2 pos-btn shadow-md"
+          >
+            <CheckCircle2 className="w-5 h-5" /> Sipariş Hazır
+          </button>
+        )}
         <button
           onClick={onClearOrder}
           disabled={orderItems.length === 0}
