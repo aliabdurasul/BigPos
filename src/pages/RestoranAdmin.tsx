@@ -109,11 +109,9 @@ export default function RestoranAdmin() {
         setProductModifiers(editingItem.id, menuModifierIds);
         toast.success('Urun guncellendi');
       } else {
-        await addMenuItem(data);
-        // Link modifiers to newly created item (find by name — item was just added to state)
-        const created = menuItems.find(m => m.name === data.name);
-        if (created && menuModifierIds.length > 0) {
-          setProductModifiers(created.id, menuModifierIds);
+        const newId = await addMenuItem(data);
+        if (menuModifierIds.length > 0) {
+          setProductModifiers(newId, menuModifierIds);
         }
         toast.success('Urun eklendi');
       }

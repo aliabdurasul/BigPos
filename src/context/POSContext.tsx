@@ -37,7 +37,7 @@ interface POSContextType {
   updateStaff: (id: string, updates: Partial<Staff>) => Promise<void>;
   addCategory: (cat: Omit<Category, 'id'>) => Promise<void>;
   removeCategory: (id: string) => Promise<void>;
-  addMenuItem: (item: Omit<MenuItem, 'id'>) => Promise<void>;
+  addMenuItem: (item: Omit<MenuItem, 'id'>) => Promise<string>;
   updateMenuItem: (id: string, updates: Partial<MenuItem>) => Promise<void>;
   removeMenuItem: (id: string) => Promise<void>;
   addTable: (table: Omit<Table, 'id'>) => Promise<void>;
@@ -750,7 +750,7 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
     setCategories(prev => prev.filter(c => c.id !== id));
   }, []);
 
-  const addMenuItemFn = useCallback(async (item: Omit<MenuItem, 'id'>) => {
+  const addMenuItemFn = useCallback(async (item: Omit<MenuItem, 'id'>): Promise<string> => {
     const id = crypto.randomUUID();
     const { error } = await supabase.from('menu_items').insert({
       id, name: item.name, description: item.description || null, price: item.price,
@@ -762,6 +762,7 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
     });
     if (error) { console.error('addMenuItem error:', error); throw error; }
     setMenuItems(prev => [...prev, { ...item, id }]);
+    return id;
   }, [restaurantId]);
 
   const updateMenuItemFn = useCallback(async (id: string, updates: Partial<MenuItem>) => {
