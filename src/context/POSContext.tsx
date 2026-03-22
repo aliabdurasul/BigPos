@@ -161,8 +161,22 @@ function deriveTableStatus(allOrders: Order[], tableId: string): TableStatus {
   return 'occupied';
 }
 
-// Active statuses that should be fetched (not terminal)
-const ACTIVE_ORDER_STATUSES = ['active', 'ready'];
+// Normalize DB status → frontend status (handles both old and new DB schemas)
+function normalizeOrderStatus(dbStatus: string): OrderStatus {
+  switch (dbStatus) {
+    case 'created': case 'sent_to_kitchen': case 'preparing': case 'active':
+      return 'active';
+    case 'waiting_payment': case 'ready':
+      return 'ready';
+    case 'closed': case 'paid':
+      return 'paid';
+    default:
+      return 'active';
+  }
+}
+
+// Active statuses that should be fetched (not terminal) — includes both old and new values
+const ACTIVE_ORDER_STATUSES = ['active', 'ready', 'created', 'sent_to_kitchen', 'preparing', 'waiting_payment'];
 
 // ─── Provider ─────────────────────────────────────
 
@@ -292,7 +306,7 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
           tableId: o.table_id as string,
           tableName: o.table_name as string,
           items: itemsByOrder.get(o.id as string) || [],
-          status: o.status as OrderStatus,
+          status: normalizeOrderStatus(o.status as string),
           createdAt: new Date(o.created_at as string),
           total: Number(o.total),
           payments: paymentsByOrder.get(o.id as string),
@@ -361,7 +375,7 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
       tableId: o.table_id as string,
       tableName: o.table_name as string,
       items: itemsByOrder.get(o.id as string) || [],
-      status: o.status as OrderStatus,
+      status: normalizeOrderStatus(o.status as string),
       createdAt: new Date(o.created_at as string),
       total: Number(o.total),
       payments: paymentsByOrder.get(o.id as string),
@@ -451,7 +465,7 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
               tableId: payload.new.table_id,
               tableName: payload.new.table_name,
               items: [],
-              status: payload.new.status as OrderStatus,
+              status: normalizeOrderStatus(payload.new.status as string),
               createdAt: new Date(payload.new.created_at),
               total: Number(payload.new.total),
               prepayment: payload.new.prepayment ? Number(payload.new.prepayment) : undefined,
@@ -471,7 +485,7 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
             if (o.id !== payload.new.id) return o;
             return {
               ...o,
-              status: payload.new.status as OrderStatus,
+              status: normalizeOrderStatus(payload.new.status as string),
               total: Number(payload.new.total),
               prepayment: payload.new.prepayment ? Number(payload.new.prepayment) : undefined,
             };
@@ -578,14 +592,32 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
     }));
 
     // Try atomic RPC first — single transaction for order + items + table status
+    // Map 'active' → 'sent_to_kitchen' for backward compat with old DB schema
+    const dbStatus = order.status === 'active' ? 'sent_to_kitchen' : order.status;
     const { data: rpcOrderId, error: rpcErr } = await supabase.rpc('create_order_with_items', {
       p_restaurant_id: restaurantId,
       p_table_id: order.tableId,
       p_table_name: order.tableName,
       p_staff_id: staffId || null,
-      p_status: order.status,
+      p_status: dbStatus,
       p_items: itemsPayload,
     });
+
+    if (rpcErr && rpcErr.code === '23514' && dbStatus === 'sent_to_kitchen') {
+      // Old status rejected — v7 migration applied, retry with 'active'
+      const { data: retryId, error: retryErr } = await supabase.rpc('create_order_with_items', {
+        p_restaurant_id: restaurantId,
+        p_table_id: order.tableId,
+        p_table_name: order.tableName,
+        p_staff_id: staffId || null,
+        p_status: 'active',
+        p_items: itemsPayload,
+      });
+      if (!retryErr && retryId) {
+        await refetchOrders();
+        return { success: true };
+      }
+    }
 
     if (!rpcErr && rpcOrderId) {
       // RPC succeeded — refetch to get the DB-created order with proper IDs
@@ -605,7 +637,7 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
       id: orderId,
       table_id: order.tableId,
       table_name: order.tableName,
-      status: order.status,
+      status: dbStatus,
       total: order.total,
       prepayment: 0,
       restaurant_id: restaurantId,
@@ -613,9 +645,30 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
     });
 
     if (error) {
-      console.error('addOrder DB error:', error.message, error.code);
-      setOrders(prev => prev.filter(o => o.id !== orderId));
-      return { success: false, error: error.message };
+      // If constraint violation, retry with the other status value
+      if (error.code === '23514' && dbStatus === 'sent_to_kitchen') {
+        const { error: retryErr } = await supabase.from('orders').insert({
+          id: orderId,
+          table_id: order.tableId,
+          table_name: order.tableName,
+          status: 'active',
+          total: order.total,
+          prepayment: 0,
+          restaurant_id: restaurantId,
+          staff_id: staffId || null,
+        });
+        if (!retryErr) {
+          // Insert items and continue
+        } else {
+          console.error('addOrder DB error (retry):', retryErr.message, retryErr.code);
+          setOrders(prev => prev.filter(o => o.id !== orderId));
+          return { success: false, error: retryErr.message };
+        }
+      } else {
+        console.error('addOrder DB error:', error.message, error.code);
+        setOrders(prev => prev.filter(o => o.id !== orderId));
+        return { success: false, error: error.message };
+      }
     }
 
     if (itemsWithIds.length > 0) {
@@ -642,19 +695,31 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updates } : o));
 
     const dbUpdates: Record<string, unknown> = {};
-    if (updates.status !== undefined) dbUpdates.status = updates.status;
+    if (updates.status !== undefined) dbUpdates.status = updates.status === 'active' ? 'sent_to_kitchen' : updates.status;
     if (updates.total !== undefined) dbUpdates.total = updates.total;
     if (updates.prepayment !== undefined) dbUpdates.prepayment = updates.prepayment;
     if (Object.keys(dbUpdates).length > 0) {
       supabase.from('orders').update(dbUpdates).eq('id', orderId).then(({ error }) => {
-        if (error) console.error('updateOrder error:', error);
+        if (error && error.code === '23514' && updates.status === 'active') {
+          // v7 migration applied — retry with 'active'
+          supabase.from('orders').update({ ...dbUpdates, status: 'active' }).eq('id', orderId).then(({ error: e2 }) => {
+            if (e2) console.error('updateOrder error:', e2);
+          });
+        } else if (error) {
+          console.error('updateOrder error:', error);
+        }
       });
     }
   }, []);
 
   const updateOrderStatus = useCallback(async (orderId: string, status: OrderStatus) => {
     // DB-first: write to database, then update local state
-    const { error } = await supabase.from('orders').update({ status }).eq('id', orderId);
+    const dbSt = status === 'active' ? 'sent_to_kitchen' : status;
+    let { error } = await supabase.from('orders').update({ status: dbSt }).eq('id', orderId);
+    if (error && error.code === '23514' && dbSt === 'sent_to_kitchen') {
+      // v7 migration applied — retry with 'active'
+      ({ error } = await supabase.from('orders').update({ status: 'active' }).eq('id', orderId));
+    }
     if (error) {
       console.error('updateOrderStatus error:', error);
       return;
