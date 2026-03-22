@@ -238,42 +238,6 @@ export function formatGunSonu(data: GunSonuData): string {
 // ═══════════════════════════════════════
 
 export function printReceipt(text: string, title: string = 'Fis') {
-  const printWindow = window.open('', '_blank', 'width=350,height=600');
-  if (!printWindow) return;
-
-  const escaped = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-
-  const safeTitle = title
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-
-  printWindow.document.write(`<!DOCTYPE html>
-<html><head><title>${safeTitle}</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    font-family: 'Courier New', Courier, monospace;
-    font-size: 12px;
-    line-height: 1.4;
-    padding: 8px;
-    width: 58mm;
-    color: #000;
-    white-space: pre;
-  }
-  @media print {
-    body { width: 58mm; padding: 2mm; }
-    @page { margin: 0; size: 58mm auto; }
-  }
-</style></head>
-<body>${escaped}</body></html>`);
-  printWindow.document.close();
-  // Non-blocking: let the browser render before printing
-  setTimeout(() => {
-    printWindow.focus();
-    printWindow.print();
-  }, 0);
+  // Placeholder — future: send to local Node.js print service
+  console.log(`[PRINT] ${title}\n${text}`);
 }

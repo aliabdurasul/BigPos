@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { Order } from '@/types/pos';
 import { Banknote, CreditCard, SplitSquareHorizontal, Users, Receipt, Printer, Percent, X, Landmark, Check } from 'lucide-react';
-import { formatAdisyon } from '@/lib/receipt';
-import { printToService } from '@/lib/printer';
+import { formatAdisyon, printReceipt } from '@/lib/receipt';
 
 interface PaymentScreenProps {
   order: Order;
@@ -88,19 +87,21 @@ export default function PaymentScreen({
   };
 
   const handlePrintReceipt = () => {
-    const content = formatAdisyon({
-      restaurantName: restaurantName || 'RESTORAN',
-      tableName,
-      staffName: staffName || '',
-      date: new Date(),
-      items: order.items.map(i => ({
-        name: i.menuItem.name,
-        qty: i.quantity,
-        unitPrice: i.menuItem.price + i.modifiers.reduce((s, m) => s + m.extraPrice, 0),
-      })),
-      total: effectiveTotal,
-    });
-    printToService('receipt', content);
+    printReceipt(
+      formatAdisyon({
+        restaurantName: restaurantName || 'RESTORAN',
+        tableName,
+        staffName: staffName || '',
+        date: new Date(),
+        items: order.items.map(i => ({
+          name: i.menuItem.name,
+          qty: i.quantity,
+          unitPrice: i.menuItem.price + i.modifiers.reduce((s, m) => s + m.extraPrice, 0),
+        })),
+        total: effectiveTotal,
+      }),
+      'Adisyon'
+    );
   };
 
   // ─── Payment Confirmation Modal ────────────────

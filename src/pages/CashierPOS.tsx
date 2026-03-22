@@ -2,12 +2,10 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { usePOS } from '@/context/POSContext';
 import { useAuth } from '@/context/AuthContext';
 import { Table, Order, TABLE_STATUS_COLORS, TABLE_STATUS_BORDER_COLORS, TABLE_STATUS_LABELS } from '@/types/pos';
-import { ArrowLeft, LogOut, Clock, DollarSign, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, LogOut, Clock, DollarSign } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { playSuccess } from '@/lib/sound';
-import { formatAdisyon } from '@/lib/receipt';
-import { printToService } from '@/lib/printer';
 import PaymentScreen from '@/components/cashier/PaymentScreen';
 
 function formatDuration(openedAt?: Date) {
@@ -45,7 +43,7 @@ export default function CashierPOS() {
 
   const getTableOrder = useCallback((tableId: string): Order | null => {
     const tableOrders = orders.filter(o =>
-      o.tableId === tableId && o.status !== 'paid' && o.status !== 'closed'
+      o.tableId === tableId && o.status !== 'paid'
     );
     return tableOrders[0] || null;
   }, [orders]);
@@ -65,29 +63,9 @@ export default function CashierPOS() {
   };
 
   const handleCompletePayment = async (amount: number, method: string, discountAmount?: number, discountReason?: string) => {
-    if (!selectedOrder || !selectedTable) return;
+    if (!selectedOrder) return;
     try {
       await completePayment(selectedOrder.id, amount, method, staffId || undefined, discountAmount, discountReason);
-
-      // Auto-print receipt to cashier printer (silent)
-      const receiptContent = formatAdisyon({
-        restaurantName: restaurantName || 'RESTORAN',
-        tableName: selectedTable.name,
-        staffName: staffName || '',
-        date: new Date(),
-        items: selectedOrder.items.map(i => ({
-          name: i.menuItem.name,
-          qty: i.quantity,
-          unitPrice: i.menuItem.price + i.modifiers.reduce((s, m) => s + m.extraPrice, 0),
-        })),
-        total: amount + (discountAmount || 0),
-        paymentMethod: method === 'nakit' ? 'Nakit' : method === 'kredi_karti' ? 'Kredi Karti' : 'Bolunmus',
-        paidAmount: amount,
-      });
-      printToService('receipt', receiptContent).then(r => {
-        if (!r.success) console.warn('[Receipt Print]', r.error);
-      });
-
       toast.success(`${amount} ₺ ödeme tamamlandı — ${selectedTable?.name} kapatıldı`);
       playSuccess();
       setSelectedTable(null);
@@ -128,15 +106,11 @@ export default function CashierPOS() {
   };
 
   const handleMarkReady = async (tableId: string) => {
-    const tableActiveOrders = orders.filter(o => o.tableId === tableId && o.status !== 'paid' && o.status !== 'closed');
-    for (const order of tableActiveOrders) {
-      if (order.status === 'sent_to_kitchen' || order.status === 'preparing') {
-        await markOrderReady(order.id);
-      }
+    const activeOrders = orders.filter(o => o.tableId === tableId && o.status === 'active');
+    for (const o of activeOrders) {
+      await markOrderReady(o.id);
     }
-    const tbl = tables.find(t => t.id === tableId);
-    toast.success(`${tbl?.name || 'Masa'} — Sipariş hazır, ödeme bekleniyor`);
-    playSuccess();
+    toast.success('Sipariş hazır — ödeme bekleniyor');
   };
 
   const waitingPaymentCount = tables.filter(t => t.status === 'waiting_payment').length;
@@ -190,13 +164,13 @@ export default function CashierPOS() {
             const hasAnyPayment = totalPaid > 0;
 
             return (
-              <div key={t.id} className="flex flex-col gap-1">
-                <button
-                  onClick={() => handleTableTap(t)}
-                  className={`relative flex flex-col items-center justify-center p-4 rounded-2xl border-2 ${TABLE_STATUS_BORDER_COLORS[t.status]} bg-card pos-btn transition-all ${
-                    isWaiting ? 'hover:shadow-lg ring-2 ring-pos-warning/40' : hasOrder ? 'hover:shadow-md' : 'opacity-60'
-                  }`}
-                >
+              <button
+                key={t.id}
+                onClick={() => handleTableTap(t)}
+                className={`relative flex flex-col items-center justify-center p-4 rounded-2xl border-2 ${TABLE_STATUS_BORDER_COLORS[t.status]} bg-card pos-btn transition-all ${
+                  isWaiting ? 'hover:shadow-lg ring-2 ring-pos-warning/40' : hasOrder ? 'hover:shadow-md' : 'opacity-60'
+                }`}
+              >
                 <span className={`absolute top-2 right-2 w-3 h-3 rounded-full ${TABLE_STATUS_COLORS[t.status]}`} />
                 <span className="text-2xl font-black text-foreground">{t.name.replace('Masa ', '')}</span>
                 <span className="text-xs text-muted-foreground mt-0.5">{t.name}</span>
@@ -223,16 +197,16 @@ export default function CashierPOS() {
                     <Clock className="w-2.5 h-2.5" /> {formatDuration(t.openedAt)}
                   </span>
                 )}
+
+                {hasOrder && t.status === 'occupied' && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleMarkReady(t.id); }}
+                    className="mt-1.5 px-2.5 py-1 rounded-lg bg-pos-success text-pos-success-foreground text-[10px] font-bold pos-btn"
+                  >
+                    ✅ Hazır
+                  </button>
+                )}
               </button>
-              {hasOrder && !isWaiting && (t.status === 'occupied' || t.status === 'preparing') && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleMarkReady(t.id); }}
-                  className="w-full py-1.5 rounded-xl bg-pos-success text-pos-success-foreground text-[11px] font-bold pos-btn flex items-center justify-center gap-1"
-                >
-                  <CheckCircle2 className="w-3 h-3" /> Sipariş Hazır
-                </button>
-              )}
-              </div>
             );
           })}
         </div>
@@ -240,9 +214,7 @@ export default function CashierPOS() {
         {/* Legend */}
         <div className="flex gap-4 mt-3 justify-center text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-pos-success" /> Boş</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Sipariş Var</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-pos-danger" /> Hazırlanıyor</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" /> Hazır</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Dolu</span>
           <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-pos-warning" /> Ödeme Bekliyor</span>
         </div>
       </div>

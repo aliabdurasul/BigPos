@@ -1,18 +1,16 @@
 export type UserRole = 'super_admin' | 'restoran_admin' | 'garson' | 'mutfak' | 'manager' | 'cashier';
 
-export type TableStatus = 'available' | 'occupied' | 'preparing' | 'ready' | 'waiting_payment';
+export type TableStatus = 'available' | 'occupied' | 'waiting_payment';
 
 export type LicensePlan = 'free' | 'starter' | 'pro' | 'enterprise';
 
-export type OrderStatus = 'created' | 'sent_to_kitchen' | 'preparing' | 'ready' | 'waiting_payment' | 'paid' | 'closed';
+export type OrderStatus = 'active' | 'ready' | 'paid';
 
 export type PaymentMethod = 'nakit' | 'kredi_karti' | 'bolunmus' | 'discount';
 
 export type PaymentType = 'payment' | 'prepayment';
 
 export type OrderItemPaymentStatus = 'unpaid' | 'paid';
-
-export type OrderItemStatus = 'pending' | 'sent' | 'preparing' | 'ready' | 'cancelled';
 
 export type OrderSource = 'pos' | 'qr';
 
@@ -98,8 +96,6 @@ export interface OrderItem {
   quantity: number;
   modifiers: OrderItemModifier[];
   note?: string;
-  sentToKitchen?: boolean;
-  status?: OrderItemStatus;
   paymentStatus?: OrderItemPaymentStatus;
 }
 
@@ -214,33 +210,23 @@ export interface Discount {
 export const TABLE_STATUS_LABELS: Record<TableStatus, string> = {
   available: 'Boş',
   occupied: 'Dolu',
-  preparing: 'Hazırlanıyor',
-  ready: 'Hazır',
   waiting_payment: 'Ödeme Bekliyor',
 };
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
-  created: 'Oluşturuldu',
-  sent_to_kitchen: 'Mutfağa Gönderildi',
-  preparing: 'Hazırlanıyor',
+  active: 'Aktif',
   ready: 'Hazır',
-  waiting_payment: 'Ödeme Bekliyor',
   paid: 'Ödendi',
-  closed: 'Kapatıldı',
 };
 
 export const TABLE_STATUS_COLORS: Record<TableStatus, string> = {
   available: 'bg-pos-success',
   occupied: 'bg-blue-500',
-  preparing: 'bg-pos-danger',
-  ready: 'bg-orange-500',
   waiting_payment: 'bg-pos-warning',
 };
 
 export const TABLE_STATUS_BORDER_COLORS: Record<TableStatus, string> = {
   available: 'border-pos-success/30',
   occupied: 'border-blue-500/30',
-  preparing: 'border-pos-danger/30',
-  ready: 'border-orange-500/30',
   waiting_payment: 'border-pos-warning/30',
 };

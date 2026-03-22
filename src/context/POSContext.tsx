@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import {
   Category, MenuItem, Table, Order, OrderItem, OrderStatus,
   ModifierGroup, TableStatus, Payment, ModifierOption,
-  Staff, DailyClosure, OrderItemPaymentStatus,
+  Staff, DailyClosure,
 } from '@/types/pos';
 
 // ─── Context Type ──────────────────────────────────
@@ -108,9 +108,7 @@ function mapOrderItem(row: Record<string, unknown>, lookup?: Map<string, MenuIte
     quantity: Number(row.quantity),
     modifiers: (row.modifiers as OrderItem['modifiers']) || [],
     note: (row.note as string) || undefined,
-    sentToKitchen: (row.sent_to_kitchen as boolean) ?? true,
-    status: (row.status as OrderItem['status']) || 'pending',
-    paymentStatus: (row.payment_status as OrderItemPaymentStatus) || 'unpaid',
+    paymentStatus: (row.payment_status as OrderItem['paymentStatus']) || 'unpaid',
   };
 }
 
@@ -157,16 +155,14 @@ function mapStaff(row: Record<string, unknown>): Staff {
 }
 
 function deriveTableStatus(allOrders: Order[], tableId: string): TableStatus {
-  const active = allOrders.filter(o => o.tableId === tableId && o.status !== 'paid' && o.status !== 'closed');
+  const active = allOrders.filter(o => o.tableId === tableId && o.status !== 'paid');
   if (active.length === 0) return 'available';
-  if (active.some(o => o.status === 'waiting_payment')) return 'waiting_payment';
-  if (active.some(o => o.status === 'ready')) return 'ready';
-  if (active.some(o => o.status === 'preparing')) return 'preparing';
+  if (active.some(o => o.status === 'ready')) return 'waiting_payment';
   return 'occupied';
 }
 
 // Active statuses that should be fetched (not terminal)
-const ACTIVE_ORDER_STATUSES = ['created', 'sent_to_kitchen', 'preparing', 'ready', 'waiting_payment'];
+const ACTIVE_ORDER_STATUSES = ['active', 'ready'];
 
 // ─── Provider ─────────────────────────────────────
 
@@ -633,8 +629,6 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
           quantity: item.quantity,
           modifiers: item.modifiers,
           note: item.note || null,
-          sent_to_kitchen: true,
-          status: 'sent',
           restaurant_id: restaurantId,
         }))
       );
@@ -683,7 +677,7 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
   }, []);
 
   const getTableOrders = useCallback((tableId: string) => {
-    return ordersRef.current.filter(o => o.tableId === tableId && o.status !== 'paid' && o.status !== 'closed');
+    return ordersRef.current.filter(o => o.tableId === tableId && o.status !== 'paid');
   }, []);
 
   // ─── Payment Function ─────────────────────────
@@ -707,7 +701,7 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
 
   const markOrderReady = useCallback(async (orderId: string) => {
     const order = ordersRef.current.find(o => o.id === orderId);
-    const updatedOrders = ordersRef.current.map(o => o.id === orderId ? { ...o, status: 'waiting_payment' as OrderStatus } : o);
+    const updatedOrders = ordersRef.current.map(o => o.id === orderId ? { ...o, status: 'ready' as OrderStatus } : o);
     setOrders(updatedOrders);
 
     if (order?.tableId) {
@@ -715,10 +709,18 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
       setTableStatus(order.tableId, tableStatus);
     }
 
-    const { error } = await supabase.rpc('mark_order_ready', { p_order_id: orderId });
+    // Direct DB update — RPC may use old status values
+    const { error } = await supabase.from('orders').update({ status: 'ready' }).eq('id', orderId);
     if (error) {
       console.error('markOrderReady error:', error);
       await refetchOrders();
+    }
+    // Also update table status in DB
+    if (order?.tableId) {
+      const tableStatus = deriveTableStatus(updatedOrders, order.tableId);
+      supabase.from('tables').update({ status: tableStatus }).eq('id', order.tableId).then(({ error: tErr }) => {
+        if (tErr) console.error('markOrderReady table update error:', tErr);
+      });
     }
   }, [refetchOrders, setTableStatus]);
 

@@ -63,7 +63,7 @@ const App = () => (
             } />
             <Route path="/pos/:slug/kitchen" element={
               <ProtectedRoute allowedRoles={['mutfak']}>
-                <POSLayout><MutfakEkrani /></POSLayout>
+                <MutfakEkrani />
               </ProtectedRoute>
             } />
             <Route path="*" element={<NotFound />} />

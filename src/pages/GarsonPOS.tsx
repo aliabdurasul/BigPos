@@ -5,8 +5,7 @@ import { OrderItem, Table, MenuItem, OrderItemModifier } from '@/types/pos';
 import { ArrowLeft, Clock, LogOut, AlertTriangle, LayoutGrid, UtensilsCrossed, ClipboardList } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { formatAdisyon, formatKitchenTicket } from '@/lib/receipt';
-import { printToService } from '@/lib/printer';
+import { formatAdisyon, printReceipt } from '@/lib/receipt';
 import { playSuccess } from '@/lib/sound';
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -79,7 +78,7 @@ export default function GarsonPOS() {
   }, [currentTableInContext?.status]);
 
   const saveDrafts = useCallback((tableId: string, items: OrderItem[]) => {
-    const unsent = items.filter(i => !i.sentToKitchen);
+    const unsent = items.filter(i => !(i as any)._fromDB);
     if (unsent.length > 0) {
       draftItemsRef.current.set(tableId, unsent);
     } else {
@@ -107,7 +106,7 @@ export default function GarsonPOS() {
     setSelectedTable(t);
     const existingOrders = getTableOrders(t.id);
     const sentItems = existingOrders.length > 0
-      ? existingOrders.flatMap(o => o.items.map(i => ({ ...i, sentToKitchen: true })))
+      ? existingOrders.flatMap(o => o.items.map(i => ({ ...i, _fromDB: true } as any)))
       : [];
     const drafts = draftItemsRef.current.get(t.id) || [];
     setOrderItems([...sentItems, ...drafts]);
@@ -122,12 +121,13 @@ export default function GarsonPOS() {
     [orderItems]
   );
 
-  const tableOrders = selectedTable ? orders.filter(o => o.tableId === selectedTable.id && o.status !== 'paid' && o.status !== 'closed') : [];
+  const tableOrders = selectedTable ? orders.filter(o => o.tableId === selectedTable.id && o.status !== 'paid') : [];
   const totalPaid = tableOrders.reduce((sum, o) => sum + (o.payments || []).reduce((s, p) => s + p.amount, 0), 0);
   const totalPrepayment = tableOrders.reduce((sum, o) => (o.payments || []).filter(p => p.type === 'prepayment').reduce((s, p) => s + p.amount, sum), 0);
   const remainingAmount = Math.max(0, total - totalPaid);
 
-  const newItemCount = orderItems.filter(i => !i.sentToKitchen).length;
+  const newItemCount = orderItems.filter(i => !(i as any)._fromDB).length;
+  const hasActiveOrders = selectedTable ? orders.some(o => o.tableId === selectedTable.id && o.status === 'active') : false;
 
   const handleItemTap = useCallback((item: MenuItem) => {
     if (!selectedTable) return;
@@ -143,10 +143,10 @@ export default function GarsonPOS() {
   const addItemDirect = (item: MenuItem, modifiers: OrderItemModifier[], note: string) => {
     setOrderItems(prev => {
       if (modifiers.length === 0 && !note) {
-        const existing = prev.find(i => i.menuItem.id === item.id && i.modifiers.length === 0 && !i.note && !i.sentToKitchen);
+        const existing = prev.find(i => i.menuItem.id === item.id && i.modifiers.length === 0 && !i.note && !(i as any)._fromDB);
         if (existing) return prev.map(i => i.id === existing.id ? { ...i, quantity: i.quantity + 1 } : i);
       }
-      return [...prev, { id: Date.now().toString(), menuItem: item, quantity: 1, modifiers, note: note || undefined, sentToKitchen: false }];
+      return [...prev, { id: Date.now().toString(), menuItem: item, quantity: 1, modifiers, note: note || undefined }];
     });
   };
 
@@ -159,7 +159,7 @@ export default function GarsonPOS() {
 
   const handleRemoveItem = (itemId: string) => {
     const item = orderItems.find(i => i.id === itemId);
-    if (item?.sentToKitchen) {
+    if ((item as any)?._fromDB) {
       setShowSentWarning(itemId);
     } else {
       setOrderItems(prev => prev.filter(i => i.id !== itemId));
@@ -176,7 +176,7 @@ export default function GarsonPOS() {
 
   const handleUpdateQty = (itemId: string, delta: number) => {
     const item = orderItems.find(i => i.id === itemId);
-    if (item?.sentToKitchen && delta < 0) {
+    if ((item as any)?._fromDB && delta < 0) {
       setShowSentWarning(itemId);
       return;
     }
@@ -201,7 +201,7 @@ export default function GarsonPOS() {
 
   const sendToKitchen = async () => {
     if (!selectedTable || orderItems.length === 0) return;
-    const newItems = orderItems.filter(i => !i.sentToKitchen);
+    const newItems = orderItems.filter(i => !(i as any)._fromDB);
     if (newItems.length === 0) {
       toast.info('Tum urunler zaten mutfaga gonderildi');
       return;
@@ -215,7 +215,7 @@ export default function GarsonPOS() {
       tableId: selectedTable.id,
       tableName: selectedTable.name,
       items: newItems,
-      status: 'sent_to_kitchen',
+      status: 'active',
       createdAt: new Date(),
       total: newItemsTotal,
     });
@@ -225,24 +225,6 @@ export default function GarsonPOS() {
     }
     openTable(selectedTable.id);
     setTableTotal(selectedTable.id, total);
-
-    // Auto-print kitchen ticket (silent, no popup)
-    const kitchenContent = formatKitchenTicket({
-      tableName: selectedTable.name,
-      staffName: staffName || undefined,
-      date: new Date(),
-      items: newItems.map(i => ({
-        name: i.menuItem.name,
-        qty: i.quantity,
-        modifiers: i.modifiers.map(m => m.optionName + (m.extraPrice > 0 ? ` +${m.extraPrice}₺` : '')),
-        note: i.note,
-      })),
-      restaurantName: restaurantName || undefined,
-    });
-    printToService('kitchen', kitchenContent).then(r => {
-      if (!r.success) console.warn('[Kitchen Print]', r.error);
-    });
-
     toast.success('Siparis mutfaga gonderildi!');
     playSuccess();
     draftItemsRef.current.delete(selectedTable.id);
@@ -252,33 +234,14 @@ export default function GarsonPOS() {
   };
 
   const clearOrder = () => {
-    const hasKitchenItems = orderItems.some(i => i.sentToKitchen);
+    const hasKitchenItems = orderItems.some(i => (i as any)._fromDB);
     if (hasKitchenItems) {
-      setOrderItems(prev => prev.filter(i => i.sentToKitchen));
+      setOrderItems(prev => prev.filter(i => (i as any)._fromDB));
       toast.info('Gönderilmemiş ürünler temizlendi');
     } else {
       setOrderItems([]);
     }
     if (selectedTable) draftItemsRef.current.delete(selectedTable.id);
-  };
-
-  const handleMarkReady = async () => {
-    if (!selectedTable) return;
-    const tableActiveOrders = orders.filter(o => o.tableId === selectedTable.id && o.status !== 'paid' && o.status !== 'closed');
-    if (tableActiveOrders.length === 0) {
-      toast.info('Bu masanın aktif siparişi yok');
-      return;
-    }
-    for (const order of tableActiveOrders) {
-      if (order.status === 'sent_to_kitchen' || order.status === 'preparing') {
-        await markOrderReady(order.id);
-      }
-    }
-    toast.success(`${selectedTable.name} — Sipariş hazır, ödeme bekleniyor`);
-    playSuccess();
-    setSelectedTable(null);
-    setOrderItems([]);
-    if (isMobile) setMobileTab('tables');
   };
 
   const printAdisyon = () => {
@@ -288,15 +251,30 @@ export default function GarsonPOS() {
       qty: i.quantity,
       unitPrice: i.menuItem.price + i.modifiers.reduce((s, m) => s + m.extraPrice, 0),
     }));
-    const content = formatAdisyon({
-      restaurantName: restaurantName || 'RESTORAN',
-      tableName: selectedTable.name,
-      staffName: staffName || '',
-      date: new Date(),
-      items,
-      total,
-    });
-    printToService('receipt', content);
+    printReceipt(
+      formatAdisyon({
+        restaurantName: restaurantName || 'RESTORAN',
+        tableName: selectedTable.name,
+        staffName: staffName || '',
+        date: new Date(),
+        items,
+        total,
+      }),
+      'Adisyon'
+    );
+  };
+
+  const handleMarkReady = async () => {
+    if (!selectedTable) return;
+    const activeOrders = orders.filter(o => o.tableId === selectedTable.id && o.status === 'active');
+    if (activeOrders.length === 0) {
+      toast.info('Hazır işaretlenecek aktif sipariş yok');
+      return;
+    }
+    for (const o of activeOrders) {
+      await markOrderReady(o.id);
+    }
+    toast.success('Sipariş hazır — ödeme bekleniyor');
   };
 
   useEffect(() => {
@@ -395,6 +373,7 @@ export default function GarsonPOS() {
               onClearOrder={clearOrder}
               onPrintAdisyon={printAdisyon}
               onMarkReady={handleMarkReady}
+              hasActiveOrders={hasActiveOrders}
               fullWidth
             />
           )}
@@ -526,6 +505,7 @@ export default function GarsonPOS() {
             onClearOrder={clearOrder}
             onPrintAdisyon={printAdisyon}
             onMarkReady={handleMarkReady}
+            hasActiveOrders={hasActiveOrders}
           />
         )}
 

@@ -1,5 +1,5 @@
 import { OrderItem, Table } from '@/types/pos';
-import { Minus, Plus, X, Send, Trash2, MessageSquare, Printer, CheckCircle2 } from 'lucide-react';
+import { Minus, Plus, X, Send, Trash2, MessageSquare, Printer, CheckCircle } from 'lucide-react';
 
 interface OrderPanelProps {
   selectedTable: Table | null;
@@ -19,6 +19,7 @@ interface OrderPanelProps {
   onClearOrder: () => void;
   onPrintAdisyon: () => void;
   onMarkReady?: () => void;
+  hasActiveOrders?: boolean;
   fullWidth?: boolean;
 }
 
@@ -26,7 +27,7 @@ export default function OrderPanel({
   selectedTable, orderItems, total, totalPaid, totalPrepayment, remainingAmount,
   editNoteId, editNoteText,
   onUpdateQty, onRemoveItem, onEditNote, onSaveNote, onEditNoteTextChange,
-  onSendToKitchen, onClearOrder, onPrintAdisyon, onMarkReady,
+  onSendToKitchen, onClearOrder, onPrintAdisyon, onMarkReady, hasActiveOrders,
   fullWidth,
 }: OrderPanelProps) {
   return (
@@ -55,12 +56,12 @@ export default function OrderPanel({
         ) : (
           <div className="space-y-1.5">
             {orderItems.map(item => (
-              <div key={item.id} className={`p-2.5 rounded-xl animate-slide-in ${item.sentToKitchen ? 'bg-pos-info/5 border border-pos-info/20' : 'bg-muted/40'}`}>
+              <div key={item.id} className={`p-2.5 rounded-xl animate-slide-in ${(item as any)._fromDB ? 'bg-pos-info/5 border border-pos-info/20' : 'bg-muted/40'}`}>
                 <div className="flex items-start gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       <p className="text-sm font-semibold truncate">{item.menuItem.name}</p>
-                      {item.sentToKitchen && (
+                      {(item as any)._fromDB && (
                         <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-pos-info/10 text-pos-info font-bold shrink-0">GÖNDERİLDİ</span>
                       )}
                     </div>
@@ -137,12 +138,12 @@ export default function OrderPanel({
         >
           <Send className="w-5 h-5" /> Mutfağa Gönder
         </button>
-        {onMarkReady && orderItems.some(i => i.sentToKitchen) && (
+        {hasActiveOrders && onMarkReady && (
           <button
             onClick={onMarkReady}
             className="w-full py-3 rounded-xl bg-pos-success text-pos-success-foreground font-bold text-sm flex items-center justify-center gap-2 pos-btn shadow-md"
           >
-            <CheckCircle2 className="w-5 h-5" /> Sipariş Hazır
+            <CheckCircle className="w-4 h-4" /> Sipariş Hazır
           </button>
         )}
         <button

@@ -77,7 +77,7 @@ export default function TableGrid({ tables, orders, floors, selectedFloor, onSel
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 content-start pb-24">
         {floorTables.map(t => {
-          const tOrders = orders.filter(o => o.tableId === t.id && o.status !== 'paid' && o.status !== 'closed');
+          const tOrders = orders.filter(o => o.tableId === t.id && o.status !== 'paid');
           const tPrepay = tOrders.reduce((sum, o) => sum + (o.prepayment || 0), 0);
           return (
             <TableCard
@@ -91,9 +91,7 @@ export default function TableGrid({ tables, orders, floors, selectedFloor, onSel
       </div>
       <div className="flex gap-4 mt-3 justify-center text-xs text-muted-foreground flex-wrap shrink-0">
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-pos-success" /> Boş</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Sipariş Var</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-pos-danger" /> Hazırlanıyor</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" /> Hazır</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Dolu</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-pos-warning" /> Ödeme Bekliyor</span>
       </div>
     </div>
