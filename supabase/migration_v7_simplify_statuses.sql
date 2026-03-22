@@ -7,25 +7,26 @@
 -- Updates RPCs accordingly
 -- ============================================
 
--- 1. MIGRATE EXISTING ORDER DATA
--- Map old statuses → new 3-status model
+-- 1. DROP OLD CONSTRAINTS FIRST (so data migration can use new values)
+ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;
+ALTER TABLE tables DROP CONSTRAINT IF EXISTS tables_status_check;
+
+-- 2. MIGRATE EXISTING ORDER DATA
 UPDATE orders SET status = 'active'  WHERE status IN ('created', 'sent_to_kitchen', 'preparing');
 UPDATE orders SET status = 'ready'   WHERE status = 'waiting_payment';
 -- 'ready' stays 'ready', 'paid' stays 'paid'
 UPDATE orders SET status = 'paid'    WHERE status = 'closed';
 
--- 2. UPDATE ORDER STATUS CONSTRAINT
-ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;
+-- 3. ADD NEW ORDER STATUS CONSTRAINT
 ALTER TABLE orders ADD CONSTRAINT orders_status_check
   CHECK (status IN ('active', 'ready', 'paid'));
 ALTER TABLE orders ALTER COLUMN status SET DEFAULT 'active';
 
--- 3. MIGRATE EXISTING TABLE DATA
+-- 4. MIGRATE EXISTING TABLE DATA
 UPDATE tables SET status = 'occupied' WHERE status IN ('preparing', 'ready');
 -- 'available', 'occupied', 'waiting_payment' stay as-is
 
--- 4. UPDATE TABLE STATUS CONSTRAINT
-ALTER TABLE tables DROP CONSTRAINT IF EXISTS tables_status_check;
+-- 5. ADD NEW TABLE STATUS CONSTRAINT
 ALTER TABLE tables ADD CONSTRAINT tables_status_check
   CHECK (status IN ('available', 'occupied', 'waiting_payment'));
 
@@ -102,7 +103,7 @@ DROP FUNCTION IF EXISTS send_order_to_kitchen(uuid);
 DROP FUNCTION IF EXISTS create_order_with_items(uuid, uuid, text, uuid, text, jsonb);
 CREATE OR REPLACE FUNCTION create_order_with_items(
   p_restaurant_id uuid, p_table_id uuid, p_table_name text,
-  p_staff_id uuid, p_status text, p_items jsonb
+  p_staff_id uuid, p_items jsonb
 ) RETURNS uuid AS $fn$
 DECLARE
   v_order_id uuid := gen_random_uuid();
@@ -114,7 +115,7 @@ BEGIN
   END LOOP;
 
   INSERT INTO orders (id, table_id, table_name, status, total, restaurant_id, staff_id, prepayment)
-  VALUES (v_order_id, p_table_id, p_table_name, p_status, v_total, p_restaurant_id, p_staff_id, 0);
+  VALUES (v_order_id, p_table_id, p_table_name, 'active', v_total, p_restaurant_id, p_staff_id, 0);
 
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
     INSERT INTO order_items (id, order_id, menu_item_id, menu_item_name, menu_item_price,
