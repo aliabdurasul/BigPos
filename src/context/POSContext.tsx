@@ -75,7 +75,6 @@ function mapMenuItem(row: Record<string, unknown>): MenuItem {
     description: (row.description as string) || undefined,
     price: Number(row.price),
     categoryId: (row.category_id as string) || '',
-    hasModifiers: (row.has_modifiers as boolean) || false,
     image: (row.image as string) || undefined,
     portionInfo: (row.portion_info as string) || undefined,
     allergenInfo: (row.allergen_info as string) || undefined,
@@ -775,7 +774,6 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
     if (updates.description !== undefined) dbUpdates.description = updates.description || null;
     if (updates.price !== undefined) dbUpdates.price = updates.price;
     if (updates.categoryId !== undefined) dbUpdates.category_id = updates.categoryId;
-    if (updates.hasModifiers !== undefined) dbUpdates.has_modifiers = updates.hasModifiers;
     if (updates.image !== undefined) dbUpdates.image = updates.image || null;
     if (updates.portionInfo !== undefined) dbUpdates.portion_info = updates.portionInfo || null;
     if (updates.allergenInfo !== undefined) dbUpdates.allergen_info = updates.allergenInfo || null;

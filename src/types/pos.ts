@@ -37,7 +37,6 @@ export interface MenuItem {
   description?: string;
   price: number;
   categoryId: string;
-  hasModifiers?: boolean;
   image?: string;
   portionInfo?: string;
   allergenInfo?: string;

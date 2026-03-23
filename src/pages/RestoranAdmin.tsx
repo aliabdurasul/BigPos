@@ -91,13 +91,11 @@ export default function RestoranAdmin() {
 
   const handleSaveMenuItem = async () => {
     if (!menuForm.name || !menuForm.price) return;
-    const hasModifiers = menuModifierIds.length > 0;
     const data = {
       name: menuForm.name,
       description: menuForm.description || undefined,
       price: Number(menuForm.price),
       categoryId: menuForm.categoryId,
-      hasModifiers,
       portionInfo: menuForm.portionInfo || undefined,
       allergenInfo: menuForm.allergenInfo || undefined,
       spiceLevel: menuForm.spiceLevel,
