@@ -880,10 +880,11 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
   // ─── Product-Modifier Group Mapping ────────────
 
   const setProductModifiers = useCallback(async (menuItemId: string, groupIds: string[]) => {
-    // Optimistic update
-    const prev = new Map(productModifierMap);
-    setProductModifierMap(p => {
-      const next = new Map(p);
+    // Capture current state for rollback via functional getter (avoids stale closure)
+    let rollbackMap: Map<string, string[]> | null = null;
+    setProductModifierMap(prev => {
+      rollbackMap = new Map(prev);
+      const next = new Map(prev);
       next.set(menuItemId, groupIds);
       return next;
     });
@@ -900,12 +901,12 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
       await refetchModifiers();
     } catch (err) {
       console.error('setProductModifiers error:', err);
-      setProductModifierMap(prev);
+      if (rollbackMap) setProductModifierMap(rollbackMap);
       throw err;
     } finally {
       modifierSyncRef.current = false;
     }
-  }, [productModifierMap, refetchModifiers]);
+  }, [refetchModifiers]);
 
   // ─── Modifier Group CRUD ───────────────────────
 
