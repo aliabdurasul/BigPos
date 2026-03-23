@@ -46,7 +46,7 @@ interface POSContextType {
   removeFloor: (name: string) => Promise<void>;
   closeDailyReport: (data: Omit<DailyClosure, 'id'>) => Promise<void>;
   productModifierMap: Map<string, string[]>;
-  setProductModifiers: (menuItemId: string, groupIds: string[]) => void;
+  setProductModifiers: (menuItemId: string, groupIds: string[]) => Promise<void>;
   addModifierGroup: (group: { name: string; type: 'checkbox' | 'radio' }) => Promise<string>;
   updateModifierGroup: (id: string, updates: { name?: string; type?: 'checkbox' | 'radio' }) => Promise<void>;
   removeModifierGroup: (id: string) => Promise<void>;
@@ -188,6 +188,7 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
   const reverseFloorMapRef = useRef(new Map<string, string>());
   const ordersRef = useRef(orders);
   ordersRef.current = orders;
+  const modifierSyncRef = useRef(false);
 
   // Keep menuItemsRef in sync so mapOrderItem can look up prices even when columns are null
   useEffect(() => {
@@ -374,13 +375,16 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
 
   const refetchModifiers = useCallback(async () => {
     const rid = restaurantId;
-    const [{ data: modData }, { data: itemData }, { data: pmgData }] = await Promise.all([
+    const [{ data: modData }, { data: itemData }] = await Promise.all([
       supabase.from('modifier_groups').select('*, modifier_options(*)').eq('restaurant_id', rid).order('sort_order'),
       supabase.from('menu_items').select('id').eq('restaurant_id', rid).eq('active', true),
-      supabase.from('product_modifier_groups').select('*'),
     ]);
-    setModifierGroups((modData || []).map(mapModifierGroup));
     const menuItemIds = new Set((itemData || []).map((i: Record<string, unknown>) => i.id as string));
+    const itemIdArray = Array.from(menuItemIds);
+    const { data: pmgData } = itemIdArray.length > 0
+      ? await supabase.from('product_modifier_groups').select('*').in('menu_item_id', itemIdArray)
+      : { data: [] as Record<string, unknown>[] };
+    setModifierGroups((modData || []).map(mapModifierGroup));
     const pmMap = new Map<string, string[]>();
     (pmgData || []).forEach((row: Record<string, unknown>) => {
       const itemId = row.menu_item_id as string;
@@ -515,7 +519,7 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
         refetchModifiers();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'product_modifier_groups' }, () => {
-        refetchModifiers();
+        if (!modifierSyncRef.current) refetchModifiers();
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
@@ -877,21 +881,33 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
 
   // ─── Product-Modifier Group Mapping ────────────
 
-  const setProductModifiers = useCallback((menuItemId: string, groupIds: string[]) => {
-    setProductModifierMap(prev => {
-      const next = new Map(prev);
+  const setProductModifiers = useCallback(async (menuItemId: string, groupIds: string[]) => {
+    // Optimistic update
+    const prev = new Map(productModifierMap);
+    setProductModifierMap(p => {
+      const next = new Map(p);
       next.set(menuItemId, groupIds);
       return next;
     });
-    (async () => {
-      await supabase.from('product_modifier_groups').delete().eq('menu_item_id', menuItemId);
+    modifierSyncRef.current = true;
+    try {
+      const { error: delErr } = await supabase.from('product_modifier_groups').delete().eq('menu_item_id', menuItemId);
+      if (delErr) throw delErr;
       if (groupIds.length > 0) {
-        await supabase.from('product_modifier_groups').insert(
+        const { error: insErr } = await supabase.from('product_modifier_groups').insert(
           groupIds.map(gid => ({ menu_item_id: menuItemId, modifier_group_id: gid }))
         );
+        if (insErr) throw insErr;
       }
-    })();
-  }, []);
+      await refetchModifiers();
+    } catch (err) {
+      console.error('setProductModifiers error:', err);
+      setProductModifierMap(prev);
+      throw err;
+    } finally {
+      modifierSyncRef.current = false;
+    }
+  }, [productModifierMap, refetchModifiers]);
 
   // ─── Modifier Group CRUD ───────────────────────
 

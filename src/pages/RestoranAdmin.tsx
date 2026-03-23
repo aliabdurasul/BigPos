@@ -106,13 +106,11 @@ export default function RestoranAdmin() {
     try {
       if (editingItem) {
         await updateMenuItem(editingItem.id, data);
-        setProductModifiers(editingItem.id, menuModifierIds);
+        await setProductModifiers(editingItem.id, menuModifierIds);
         toast.success('Urun guncellendi');
       } else {
         const newId = await addMenuItem(data);
-        if (menuModifierIds.length > 0) {
-          setProductModifiers(newId, menuModifierIds);
-        }
+        await setProductModifiers(newId, menuModifierIds);
         toast.success('Urun eklendi');
       }
       setShowMenuDialog(false);
