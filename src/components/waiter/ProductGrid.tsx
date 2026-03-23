@@ -17,7 +17,7 @@ const ProductButton = memo(function ProductButton({ item, onTap }: { item: MenuI
   return (
     <button
       onClick={onTap}
-      className="flex flex-col items-start p-4 sm:p-5 bg-card rounded-xl border hover:border-primary/40 hover:shadow-md pos-btn min-h-[90px]"
+      className="flex flex-col items-start p-4 sm:p-5 bg-card rounded-2xl border-2 hover:border-primary/40 hover:shadow-md pos-btn min-h-[100px] touch-manipulation active:scale-[0.97] transition-transform"
     >
       <span className="font-bold text-sm leading-tight">{item.name}</span>
       {item.description && (

@@ -130,15 +130,13 @@ export default function GarsonPOS() {
   const hasActiveOrders = selectedTable ? orders.some(o => o.tableId === selectedTable.id && o.status === 'active') : false;
 
   const handleItemTap = useCallback((item: MenuItem) => {
-    if (!selectedTable) return;
-    const linked = productModifierMap.get(item.id);
-    if (item.hasModifiers && linked && linked.length > 0) {
-      setPendingItem(item);
-      setShowModifierModal(true);
-    } else {
-      addItemDirect(item, [], '');
+    if (!selectedTable) {
+      toast.warning('Önce bir masa seçin');
+      return;
     }
-  }, [selectedTable, productModifierMap]);
+    setPendingItem(item);
+    setShowModifierModal(true);
+  }, [selectedTable]);
 
   const addItemDirect = (item: MenuItem, modifiers: OrderItemModifier[], note: string) => {
     setOrderItems(prev => {
@@ -150,9 +148,11 @@ export default function GarsonPOS() {
     });
   };
 
-  const handleConfirmModifiers = (modifiers: OrderItemModifier[], note: string) => {
+  const handleConfirmModifiers = (modifiers: OrderItemModifier[], note: string, quantity: number) => {
     if (!pendingItem) return;
-    addItemDirect(pendingItem, modifiers, note);
+    for (let i = 0; i < quantity; i++) {
+      addItemDirect(pendingItem, modifiers, note);
+    }
     setShowModifierModal(false);
     setPendingItem(null);
   };
