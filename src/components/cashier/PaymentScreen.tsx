@@ -63,17 +63,12 @@ export default function PaymentScreen({
   };
 
   const handleQuickCash = (amount: number) => {
-    setConfirmPayment({ method: 'Nakit', amount, discount: discountAmount });
+    setConfirmPayment({ method: 'nakit', amount, discount: discountAmount });
   };
 
   const doConfirm = () => {
     if (!confirmPayment) return;
-    const methodMap: Record<string, string> = {
-      'Nakit': 'nakit',
-      'Kredi Karti': 'kredi_karti',
-      'Bolunmus': 'bolunmus',
-    };
-    const dbMethod = methodMap[confirmPayment.method] || 'nakit';
+    const dbMethod = confirmPayment.method;
     const disc = confirmPayment.discount > 0 ? confirmPayment.discount : undefined;
     const discReason = confirmPayment.discount > 0
       ? (discountReason || `${discountType === 'percentage' ? `%${discountValue}` : `${discountValue} TL`} indirim`)
@@ -104,6 +99,8 @@ export default function PaymentScreen({
     );
   };
 
+  const methodLabel: Record<string, string> = { nakit: 'Nakit', kredi_karti: 'Kredi Kartı', bolunmus: 'Bölünmüş', discount: 'İndirim' };
+
   // ─── Payment Confirmation Modal ────────────────
 
   if (confirmPayment) {
@@ -113,9 +110,9 @@ export default function PaymentScreen({
           <div className="p-4 border-b flex items-center justify-between shrink-0">
             <h3 className="text-lg font-black">Ödeme Onayı</h3>
             <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-              confirmPayment.method === 'Nakit' ? 'bg-pos-success/10 text-pos-success' : 'bg-pos-info/10 text-pos-info'
+              confirmPayment.method === 'nakit' ? 'bg-pos-success/10 text-pos-success' : 'bg-pos-info/10 text-pos-info'
             }`}>
-              {confirmPayment.method === 'Nakit' ? '💵' : '💳'} {confirmPayment.method}
+              {confirmPayment.method === 'nakit' ? '💵' : '💳'} {methodLabel[confirmPayment.method] || confirmPayment.method}
             </span>
           </div>
 
@@ -350,10 +347,10 @@ export default function PaymentScreen({
 
           {/* Payment buttons */}
           <div className="p-4 space-y-2">
-            <button onClick={() => handlePayment('Nakit')} className="w-full py-4 rounded-xl bg-pos-success text-pos-success-foreground font-bold text-base flex items-center justify-center gap-3 pos-btn">
+            <button onClick={() => handlePayment('nakit')} className="w-full py-4 rounded-xl bg-pos-success text-pos-success-foreground font-bold text-base flex items-center justify-center gap-3 pos-btn">
               <Banknote className="w-6 h-6" /> Nakit
             </button>
-            <button onClick={() => handlePayment('Kredi Kartı')} className="w-full py-4 rounded-xl bg-pos-info text-pos-info-foreground font-bold text-base flex items-center justify-center gap-3 pos-btn">
+            <button onClick={() => handlePayment('kredi_karti')} className="w-full py-4 rounded-xl bg-pos-info text-pos-info-foreground font-bold text-base flex items-center justify-center gap-3 pos-btn">
               <CreditCard className="w-6 h-6" /> Kredi Kartı
             </button>
 
