@@ -220,12 +220,12 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 
 export const TABLE_STATUS_COLORS: Record<TableStatus, string> = {
   available: 'bg-pos-success',
-  occupied: 'bg-blue-500',
+  occupied: 'bg-primary',
   waiting_payment: 'bg-pos-warning',
 };
 
 export const TABLE_STATUS_BORDER_COLORS: Record<TableStatus, string> = {
-  available: 'border-pos-success/30',
-  occupied: 'border-blue-500/30',
-  waiting_payment: 'border-pos-warning/30',
+  available: 'border-pos-success/20',
+  occupied: 'border-primary/20',
+  waiting_payment: 'border-pos-warning/20',
 };

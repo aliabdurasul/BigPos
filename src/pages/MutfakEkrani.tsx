@@ -15,13 +15,13 @@ export default function MutfakEkrani() {
   return (
     <div className="h-screen flex flex-col items-center justify-center bg-background p-6 text-center">
       <Printer className="w-16 h-16 text-muted-foreground mb-6" />
-      <h1 className="text-2xl font-black mb-2">Mutfak Ekranı Kaldırıldı</h1>
+      <h1 className="text-2xl font-bold mb-2">Mutfak Ekranı Kaldırıldı</h1>
       <p className="text-muted-foreground max-w-md mb-8">
         Siparişler artık yazıcıdan takip edilmektedir. Mutfak ekranı devre dışı bırakılmıştır.
       </p>
       <button
         onClick={handleLogout}
-        className="flex items-center gap-2 px-6 py-3 rounded-xl bg-primary text-primary-foreground font-bold pos-btn"
+        className="flex items-center gap-2 px-6 py-3 rounded-md bg-primary text-primary-foreground font-bold pos-btn"
       >
         <LogOut className="w-5 h-5" /> Çıkış Yap
       </button>

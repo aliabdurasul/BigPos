@@ -45,7 +45,7 @@ export default function POSEntry() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-10 p-6 bg-background">
       <div className="text-center">
-        <h1 className="text-4xl font-black tracking-tight mb-2">Lezzet-i Ala POS</h1>
+        <h1 className="text-4xl font-bold tracking-tight mb-2">Lezzet-i Ala POS</h1>
         <p className="text-muted-foreground">Restoran yonetim sistemi</p>
       </div>
 
@@ -61,12 +61,12 @@ export default function POSEntry() {
             onChange={e => setSlug(e.target.value.replace(/[^a-zA-Z0-9-]/g, ''))}
             onKeyDown={e => e.key === 'Enter' && handleGo()}
             placeholder="ornek-restoran"
-            className="flex-1 px-4 py-3 rounded-xl border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            className="flex-1 px-4 py-3 rounded-md border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           />
           <button
             onClick={handleGo}
             disabled={!slug.trim()}
-            className="px-5 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm flex items-center gap-2 pos-btn disabled:opacity-40 shadow-lg shadow-primary/20"
+            className="px-5 py-3 rounded-md bg-primary text-primary-foreground font-bold text-sm flex items-center gap-2 pos-btn disabled:opacity-40"
           >
             <ArrowRight className="w-4 h-4" /> Git
           </button>

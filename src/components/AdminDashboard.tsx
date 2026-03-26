@@ -120,12 +120,12 @@ export default function AdminDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-xl font-black">Gunluk Rapor</h2>
+          <h2 className="text-xl font-bold">Gunluk Rapor</h2>
           <p className="text-sm text-muted-foreground mt-0.5 capitalize">{dateStr}</p>
         </div>
         <button
           onClick={() => setShowReceipt(true)}
-          className="flex items-center gap-2 px-6 py-3.5 rounded-xl bg-destructive text-destructive-foreground font-black text-sm pos-btn shadow-lg hover:opacity-90 transition-opacity"
+          className="flex items-center gap-2 px-6 py-3.5 rounded-md bg-destructive text-destructive-foreground font-bold text-sm pos-btn hover:opacity-90 transition-opacity"
         >
           <FileText className="w-5 h-5" />
           Gunu Kapat
@@ -134,60 +134,60 @@ export default function AdminDashboard() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-card rounded-2xl border p-5">
+        <div className="bg-card rounded-lg border p-5">
           <div className="flex items-center gap-2 mb-2">
-            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center">
               <TrendingUp className="w-4.5 h-4.5 text-primary" />
             </div>
           </div>
           <p className="text-[11px] font-bold text-muted-foreground uppercase">Gunluk Ciro</p>
-          <p className="text-2xl font-black mt-1">{fmt(stats.totalRevenue)}</p>
+          <p className="text-2xl font-bold mt-1">{fmt(stats.totalRevenue)}</p>
         </div>
-        <div className="bg-card rounded-2xl border p-5">
+        <div className="bg-card rounded-lg border p-5">
           <div className="flex items-center gap-2 mb-2">
-            <div className="w-9 h-9 rounded-xl bg-pos-info/10 flex items-center justify-center">
-              <ShoppingCart className="w-4.5 h-4.5 text-pos-info" />
+            <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center">
+              <ShoppingCart className="w-4.5 h-4.5 text-primary" />
             </div>
           </div>
           <p className="text-[11px] font-bold text-muted-foreground uppercase">Toplam Siparis</p>
-          <p className="text-2xl font-black mt-1">{stats.totalOrders}</p>
+          <p className="text-2xl font-bold mt-1">{stats.totalOrders}</p>
         </div>
-        <div className="bg-card rounded-2xl border p-5">
+        <div className="bg-card rounded-lg border p-5">
           <div className="flex items-center gap-2 mb-2">
-            <div className="w-9 h-9 rounded-xl bg-pos-success/10 flex items-center justify-center">
-              <Banknote className="w-4.5 h-4.5 text-pos-success" />
+            <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center">
+              <Banknote className="w-4.5 h-4.5 text-primary" />
             </div>
           </div>
           <p className="text-[11px] font-bold text-muted-foreground uppercase">Nakit</p>
-          <p className="text-2xl font-black mt-1">{fmt(stats.cashPayments)}</p>
+          <p className="text-2xl font-bold mt-1">{fmt(stats.cashPayments)}</p>
         </div>
-        <div className="bg-card rounded-2xl border p-5">
+        <div className="bg-card rounded-lg border p-5">
           <div className="flex items-center gap-2 mb-2">
-            <div className="w-9 h-9 rounded-xl bg-pos-warning/10 flex items-center justify-center">
-              <CreditCard className="w-4.5 h-4.5 text-pos-warning" />
+            <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center">
+              <CreditCard className="w-4.5 h-4.5 text-primary" />
             </div>
           </div>
           <p className="text-[11px] font-bold text-muted-foreground uppercase">Kredi Karti</p>
-          <p className="text-2xl font-black mt-1">{fmt(stats.cardPayments)}</p>
+          <p className="text-2xl font-bold mt-1">{fmt(stats.cardPayments)}</p>
         </div>
       </div>
 
       {/* Hourly Chart + Top Selling */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 bg-card rounded-2xl border p-5">
-          <h3 className="text-sm font-black mb-4">Saatlik Ciro</h3>
+        <div className="lg:col-span-2 bg-card rounded-lg border p-5">
+          <h3 className="text-sm font-bold mb-4">Saatlik Ciro</h3>
           <div className="h-56">
             {hourlyData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={hourlyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(30, 12%, 87%)" />
-                  <XAxis dataKey="saat" tick={{ fontSize: 10 }} stroke="hsl(20, 8%, 46%)" />
-                  <YAxis tick={{ fontSize: 10 }} stroke="hsl(20, 8%, 46%)" tickFormatter={(v) => `${v}TL`} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 10%, 20%)" />
+                  <XAxis dataKey="saat" tick={{ fontSize: 10 }} stroke="hsl(220, 10%, 55%)" />
+                  <YAxis tick={{ fontSize: 10 }} stroke="hsl(220, 10%, 55%)" tickFormatter={(v) => `${v}TL`} />
                   <Tooltip
                     formatter={(value: number) => [`${value.toLocaleString('tr-TR')} TL`, 'Ciro']}
-                    contentStyle={{ borderRadius: 12, border: '1px solid hsl(30, 12%, 87%)', fontSize: 12 }}
+                    contentStyle={{ borderRadius: 8, border: '1px solid hsl(220, 10%, 20%)', fontSize: 12, background: 'hsl(220, 14%, 13%)', color: 'hsl(220, 10%, 92%)' }}
                   />
-                  <Bar dataKey="ciro" fill="hsl(16, 85%, 52%)" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="ciro" fill="hsl(217, 91%, 60%)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -198,21 +198,21 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <div className="bg-card rounded-2xl border p-5">
-          <h3 className="text-sm font-black mb-3 flex items-center gap-2">
+        <div className="bg-card rounded-lg border p-5">
+          <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
             <Award className="w-4 h-4 text-primary" />
             En Cok Satiranlar
           </h3>
           <div className="space-y-3">
             {stats.topSelling.length > 0 ? stats.topSelling.map((p, i) => (
               <div key={i} className="flex items-center gap-3">
-                <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black ${
+                <span className={`w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold ${
                   i === 0 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
                 }`}>
                   {i + 1}
                 </span>
                 <span className="flex-1 text-sm font-bold truncate">{p.name}</span>
-                <span className="text-xs font-black text-muted-foreground">{p.count} adet</span>
+                <span className="text-xs font-bold text-muted-foreground">{p.count} adet</span>
               </div>
             )) : (
               <p className="text-muted-foreground text-sm">Henuz veri yok</p>
@@ -223,36 +223,36 @@ export default function AdminDashboard() {
 
       {/* Masa + Odeme ozet */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-card rounded-2xl border p-5">
-          <h3 className="text-sm font-black mb-3">Odeme Dagilimi</h3>
+        <div className="bg-card rounded-lg border p-5">
+          <h3 className="text-sm font-bold mb-3">Odeme Dagilimi</h3>
           <div className="grid grid-cols-2 gap-3">
-            <div className="p-4 rounded-xl bg-pos-success/10 border border-pos-success/20">
+            <div className="p-4 rounded-lg bg-muted/50 border border-border">
               <p className="text-[10px] font-bold text-muted-foreground uppercase">Nakit</p>
-              <p className="text-lg font-black mt-1" style={{ color: 'hsl(152, 60%, 42%)' }}>{fmt(stats.cashPayments)}</p>
+              <p className="text-lg font-bold mt-1 text-foreground">{fmt(stats.cashPayments)}</p>
               <p className="text-[10px] text-muted-foreground">
                 %{stats.totalRevenue > 0 ? Math.round((stats.cashPayments / stats.totalRevenue) * 100) : 0}
               </p>
             </div>
-            <div className="p-4 rounded-xl bg-pos-info/10 border border-pos-info/20">
+            <div className="p-4 rounded-lg bg-muted/50 border border-border">
               <p className="text-[10px] font-bold text-muted-foreground uppercase">Kredi Karti</p>
-              <p className="text-lg font-black mt-1" style={{ color: 'hsl(210, 80%, 55%)' }}>{fmt(stats.cardPayments)}</p>
+              <p className="text-lg font-bold mt-1 text-foreground">{fmt(stats.cardPayments)}</p>
               <p className="text-[10px] text-muted-foreground">
                 %{stats.totalRevenue > 0 ? Math.round((stats.cardPayments / stats.totalRevenue) * 100) : 0}
               </p>
             </div>
             {stats.splitPayments > 0 && (
-              <div className="p-4 rounded-xl bg-pos-warning/10 border border-pos-warning/20">
+              <div className="p-4 rounded-lg bg-muted/50 border border-border">
                 <p className="text-[10px] font-bold text-muted-foreground uppercase">Bolunmus</p>
-                <p className="text-lg font-black mt-1" style={{ color: 'hsl(38, 92%, 50%)' }}>{fmt(stats.splitPayments)}</p>
+                <p className="text-lg font-bold mt-1 text-foreground">{fmt(stats.splitPayments)}</p>
                 <p className="text-[10px] text-muted-foreground">
                   %{stats.totalRevenue > 0 ? Math.round((stats.splitPayments / stats.totalRevenue) * 100) : 0}
                 </p>
               </div>
             )}
             {stats.discountPayments > 0 && (
-              <div className="p-4 rounded-xl bg-muted/50 border border-muted">
+              <div className="p-4 rounded-lg bg-muted/50 border border-border">
                 <p className="text-[10px] font-bold text-muted-foreground uppercase">Indirim</p>
-                <p className="text-lg font-black mt-1 text-muted-foreground">{fmt(stats.discountPayments)}</p>
+                <p className="text-lg font-bold mt-1 text-muted-foreground">{fmt(stats.discountPayments)}</p>
                 <p className="text-[10px] text-muted-foreground">
                   %{stats.totalRevenue > 0 ? Math.round((stats.discountPayments / stats.totalRevenue) * 100) : 0}
                 </p>
@@ -261,26 +261,26 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <div className="bg-card rounded-2xl border p-5">
-          <h3 className="text-sm font-black mb-3">Masa Durumu</h3>
+        <div className="bg-card rounded-lg border p-5">
+          <h3 className="text-sm font-bold mb-3">Masa Durumu</h3>
           <div className="flex gap-6 items-center h-full">
             <div className="text-center">
-              <p className="text-3xl font-black text-pos-success">{stats.availableTables}</p>
+              <p className="text-3xl font-bold text-pos-success">{stats.availableTables}</p>
               <p className="text-[10px] font-bold text-muted-foreground mt-1">Bos</p>
             </div>
             <div className="text-center">
-              <p className="text-3xl font-black text-pos-danger">{stats.activeTables}</p>
+              <p className="text-3xl font-bold text-pos-danger">{stats.activeTables}</p>
               <p className="text-[10px] font-bold text-muted-foreground mt-1">Dolu</p>
             </div>
             <div className="text-center">
-              <p className="text-3xl font-black text-pos-warning">{tables.filter(t => t.status === 'waiting_payment').length}</p>
+              <p className="text-3xl font-bold text-pos-warning">{tables.filter(t => t.status === 'waiting_payment').length}</p>
               <p className="text-[10px] font-bold text-muted-foreground mt-1">Odeme Bekliyor</p>
             </div>
             {stats.avgTableMinutes > 0 && (
               <div className="text-center ml-auto">
                 <div className="flex items-center gap-1.5">
                   <Clock className="w-4 h-4 text-muted-foreground" />
-                  <p className="text-lg font-black">{Math.floor(stats.avgTableMinutes / 60)}s {stats.avgTableMinutes % 60}dk</p>
+                  <p className="text-lg font-bold">{Math.floor(stats.avgTableMinutes / 60)}s {stats.avgTableMinutes % 60}dk</p>
                 </div>
                 <p className="text-[10px] font-bold text-muted-foreground mt-1">Ort. Masa Suresi</p>
               </div>
@@ -293,16 +293,16 @@ export default function AdminDashboard() {
       {showReceipt && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setShowReceipt(false)}>
           <div
-            className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden"
+            className="bg-card rounded-lg w-full max-w-md shadow-lg overflow-hidden"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 py-3 border-b">
-              <h3 className="font-black text-sm">Gun Sonu Fisi</h3>
+              <h3 className="font-bold text-sm">Gun Sonu Fisi</h3>
               <div className="flex gap-1">
-                <button onClick={handlePrint} className="p-2 rounded-lg hover:bg-muted pos-btn" title="Yazdir">
+                <button onClick={handlePrint} className="p-2 rounded-md hover:bg-muted pos-btn" title="Yazdir">
                   <Printer className="w-4 h-4" />
                 </button>
-                <button onClick={() => setShowReceipt(false)} className="p-2 rounded-lg hover:bg-muted pos-btn">
+                <button onClick={() => setShowReceipt(false)} className="p-2 rounded-md hover:bg-muted pos-btn">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -310,21 +310,21 @@ export default function AdminDashboard() {
 
             {/* Termal yazici fis formati - text preview */}
             <div className="p-5 max-h-[70vh] overflow-y-auto">
-              <pre style={{ fontFamily: "'Courier New', monospace", fontSize: 11, lineHeight: 1.5, color: '#000', whiteSpace: 'pre-wrap' }}>{formatGunSonu(buildGunSonuData())}</pre>
+              <pre style={{ fontFamily: "'Courier New', monospace", fontSize: 11, lineHeight: 1.5, color: 'hsl(220, 10%, 80%)', whiteSpace: 'pre-wrap' }}>{formatGunSonu(buildGunSonuData())}</pre>
             </div>
 
             <div className="px-5 pb-5 flex gap-2">
               <button
                 onClick={handleCloseDay}
                 disabled={closing}
-                className="flex-1 py-3.5 rounded-xl bg-destructive text-destructive-foreground font-black text-sm pos-btn shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+                className="flex-1 py-3.5 rounded-md bg-destructive text-destructive-foreground font-bold text-sm pos-btn flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {closing ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
                 Gunu Kapat ve Kaydet
               </button>
               <button
                 onClick={handlePrint}
-                className="px-5 py-3.5 rounded-xl border bg-card font-bold text-sm pos-btn flex items-center gap-2"
+                className="px-5 py-3.5 rounded-md border bg-card font-bold text-sm pos-btn flex items-center gap-2"
               >
                 <Printer className="w-4 h-4" />
                 Yazdir

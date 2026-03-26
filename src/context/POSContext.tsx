@@ -1003,7 +1003,7 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
         <div className="h-screen flex items-center justify-center bg-background">
           <div className="text-center">
             <div className="animate-spin w-12 h-12 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
-            <h1 className="text-2xl font-black mb-1">Lezzet-i Ala POS</h1>
+            <h1 className="text-2xl font-bold mb-1">Lezzet-i Ala POS</h1>
             <p className="text-muted-foreground">Yukleniyor...</p>
           </div>
         </div>

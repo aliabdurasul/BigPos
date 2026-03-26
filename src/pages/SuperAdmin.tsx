@@ -130,13 +130,13 @@ export default function SuperAdmin() {
         <div className="w-56 shrink-0 border-r bg-card p-3 space-y-1">
           <button
             onClick={() => setActiveTab('restoranlar')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all active:scale-[0.97] ${activeTab === 'restoranlar' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-md text-sm font-semibold transition-all active:scale-[0.97] ${activeTab === 'restoranlar' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
           >
             <Building2 className="w-5 h-5" /> Restoranlar
           </button>
           <button
             onClick={() => setActiveTab('abonelikler')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all active:scale-[0.97] ${activeTab === 'abonelikler' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-md text-sm font-semibold transition-all active:scale-[0.97] ${activeTab === 'abonelikler' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
           >
             <BarChart3 className="w-5 h-5" /> Analitik
           </button>
@@ -153,45 +153,45 @@ export default function SuperAdmin() {
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-bold">Restoran Yonetimi</h2>
-                <button onClick={() => setShowForm(v => !v)} className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm flex items-center gap-1.5 active:scale-[0.97]">
+                <button onClick={() => setShowForm(v => !v)} className="px-5 py-2.5 rounded-md bg-primary text-primary-foreground font-semibold text-sm flex items-center gap-1.5 active:scale-[0.97]">
                   <Plus className="w-4 h-4" /> Yeni Restoran
                 </button>
               </div>
 
               {showForm && (
-                <div className="bg-card border rounded-xl p-5 mb-6 space-y-3">
+                <div className="bg-card border rounded-lg p-5 mb-6 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs font-bold text-muted-foreground uppercase">Restoran Adi *</label>
-                      <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} className="w-full px-4 py-2.5 rounded-xl border bg-card text-sm mt-1" />
+                      <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} className="w-full px-4 py-2.5 rounded-md border bg-card text-sm mt-1" />
                     </div>
                     <div>
                       <label className="text-xs font-bold text-muted-foreground uppercase">Slug (URL kodu) *</label>
-                      <input value={form.slug} onChange={e => setForm(p => ({ ...p, slug: e.target.value.replace(/[^a-z0-9-]/g, '') }))} placeholder="ornek: kebapci-mehmet" className="w-full px-4 py-2.5 rounded-xl border bg-card text-sm mt-1 font-mono" />
+                      <input value={form.slug} onChange={e => setForm(p => ({ ...p, slug: e.target.value.replace(/[^a-z0-9-]/g, '') }))} placeholder="ornek: kebapci-mehmet" className="w-full px-4 py-2.5 rounded-md border bg-card text-sm mt-1 font-mono" />
                     </div>
                     <div>
                       <label className="text-xs font-bold text-muted-foreground uppercase">Sahip Adi</label>
-                      <input value={form.ownerName} onChange={e => setForm(p => ({ ...p, ownerName: e.target.value }))} className="w-full px-4 py-2.5 rounded-xl border bg-card text-sm mt-1" />
+                      <input value={form.ownerName} onChange={e => setForm(p => ({ ...p, ownerName: e.target.value }))} className="w-full px-4 py-2.5 rounded-md border bg-card text-sm mt-1" />
                     </div>
                     <div>
                       <label className="text-xs font-bold text-muted-foreground uppercase">Telefon</label>
-                      <input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} className="w-full px-4 py-2.5 rounded-xl border bg-card text-sm mt-1" />
+                      <input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} className="w-full px-4 py-2.5 rounded-md border bg-card text-sm mt-1" />
                     </div>
                     <div className="col-span-2">
                       <label className="text-xs font-bold text-muted-foreground uppercase">Adres</label>
-                      <input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} className="w-full px-4 py-2.5 rounded-xl border bg-card text-sm mt-1" />
+                      <input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} className="w-full px-4 py-2.5 rounded-md border bg-card text-sm mt-1" />
                     </div>
                     <div>
                       <label className="text-xs font-bold text-muted-foreground uppercase">Sahip Email *</label>
-                      <input type="email" autoComplete="off" value={form.ownerEmail} onChange={e => setForm(p => ({ ...p, ownerEmail: e.target.value }))} className="w-full px-4 py-2.5 rounded-xl border bg-card text-sm mt-1" />
+                      <input type="email" autoComplete="off" value={form.ownerEmail} onChange={e => setForm(p => ({ ...p, ownerEmail: e.target.value }))} className="w-full px-4 py-2.5 rounded-md border bg-card text-sm mt-1" />
                     </div>
                     <div>
                       <label className="text-xs font-bold text-muted-foreground uppercase">Sahip Sifre *</label>
-                      <input type="password" autoComplete="new-password" value={form.ownerPassword} onChange={e => setForm(p => ({ ...p, ownerPassword: e.target.value }))} className="w-full px-4 py-2.5 rounded-xl border bg-card text-sm mt-1" />
+                      <input type="password" autoComplete="new-password" value={form.ownerPassword} onChange={e => setForm(p => ({ ...p, ownerPassword: e.target.value }))} className="w-full px-4 py-2.5 rounded-md border bg-card text-sm mt-1" />
                     </div>
                     <div>
                       <label className="text-xs font-bold text-muted-foreground uppercase">Plan</label>
-                      <select value={form.licensePlan} onChange={e => setForm(p => ({ ...p, licensePlan: e.target.value as LicensePlan }))} className="w-full px-4 py-2.5 rounded-xl border bg-card text-sm mt-1">
+                      <select value={form.licensePlan} onChange={e => setForm(p => ({ ...p, licensePlan: e.target.value as LicensePlan }))} className="w-full px-4 py-2.5 rounded-md border bg-card text-sm mt-1">
                         <option value="free">Free</option>
                         <option value="starter">Starter</option>
                         <option value="pro">Pro</option>
@@ -200,8 +200,8 @@ export default function SuperAdmin() {
                     </div>
                   </div>
                   <div className="flex gap-2 pt-2">
-                    <button onClick={() => setShowForm(false)} className="px-5 py-2.5 rounded-xl bg-muted font-semibold text-sm">Iptal</button>
-                    <button onClick={handleCreate} disabled={saving} className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm flex items-center gap-1.5 disabled:opacity-40">
+                    <button onClick={() => setShowForm(false)} className="px-5 py-2.5 rounded-md bg-muted font-semibold text-sm">Iptal</button>
+                    <button onClick={handleCreate} disabled={saving} className="px-5 py-2.5 rounded-md bg-primary text-primary-foreground font-semibold text-sm flex items-center gap-1.5 disabled:opacity-40">
                       {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Olustur
                     </button>
                   </div>
@@ -210,7 +210,7 @@ export default function SuperAdmin() {
 
               <div className="space-y-3">
                 {restaurants.map(r => (
-                  <div key={r.id} className="flex items-center justify-between p-4 bg-card rounded-xl border">
+                  <div key={r.id} className="flex items-center justify-between p-4 bg-card rounded-lg border">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       <span className={`w-3 h-3 rounded-full shrink-0 ${r.active ? 'bg-pos-success' : 'bg-muted-foreground'}`} />
                       <div className="min-w-0">
@@ -245,22 +245,22 @@ export default function SuperAdmin() {
             <div>
               <h2 className="text-lg font-bold mb-4">Platform Analitik</h2>
               <div className="grid grid-cols-3 gap-4 mb-6">
-                <div className="p-4 bg-card rounded-xl border text-center">
-                  <p className="text-3xl font-black text-primary">{restaurants.length}</p>
+                <div className="p-4 bg-card rounded-lg border text-center">
+                  <p className="text-3xl font-bold text-primary">{restaurants.length}</p>
                   <p className="text-sm text-muted-foreground">Toplam Restoran</p>
                 </div>
-                <div className="p-4 bg-card rounded-xl border text-center">
-                  <p className="text-3xl font-black text-pos-success">{restaurants.filter(r => r.active).length}</p>
+                <div className="p-4 bg-card rounded-lg border text-center">
+                  <p className="text-3xl font-bold text-pos-success">{restaurants.filter(r => r.active).length}</p>
                   <p className="text-sm text-muted-foreground">Aktif</p>
                 </div>
-                <div className="p-4 bg-card rounded-xl border text-center">
-                  <p className="text-3xl font-black text-muted-foreground">{restaurants.filter(r => !r.active).length}</p>
+                <div className="p-4 bg-card rounded-lg border text-center">
+                  <p className="text-3xl font-bold text-muted-foreground">{restaurants.filter(r => !r.active).length}</p>
                   <p className="text-sm text-muted-foreground">Pasif</p>
                 </div>
               </div>
               <div className="space-y-3">
                 {restaurants.map(r => (
-                  <div key={r.id} className="flex items-center justify-between p-4 bg-card rounded-xl border">
+                  <div key={r.id} className="flex items-center justify-between p-4 bg-card rounded-lg border">
                     <div>
                       <p className="font-semibold">{r.name}</p>
                       <p className="text-sm text-muted-foreground">{r.licensePlan} plan{r.ownerName ? ` • ${r.ownerName}` : ''}</p>

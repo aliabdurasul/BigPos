@@ -56,13 +56,13 @@ export default function OrderPanel({
         ) : (
           <div className="space-y-1.5">
             {orderItems.map(item => (
-              <div key={item.id} className={`p-2.5 rounded-xl animate-slide-in ${(item as any)._fromDB ? 'bg-pos-info/5 border border-pos-info/20' : 'bg-muted/40'}`}>
+              <div key={item.id} className={`p-2.5 rounded-lg animate-slide-in ${(item as any)._fromDB ? 'bg-muted/30 border border-border' : 'bg-muted/40'}`}>
                 <div className="flex items-start gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       <p className="text-sm font-semibold truncate">{item.menuItem.name}</p>
                       {(item as any)._fromDB && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-pos-info/10 text-pos-info font-bold shrink-0">GÖNDERİLDİ</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-bold shrink-0">GÖNDERİLDİ</span>
                       )}
                     </div>
                     {item.modifiers.length > 0 && (
@@ -75,7 +75,7 @@ export default function OrderPanel({
                       </div>
                     )}
                     {item.note && (
-                      <p className="text-[11px] text-pos-warning font-medium mt-0.5 italic">Not: {item.note}</p>
+                      <p className="text-[11px] text-muted-foreground font-medium mt-0.5 italic">Not: {item.note}</p>
                     )}
                     {editNoteId === item.id && (
                       <div className="flex gap-1 mt-1">
@@ -96,11 +96,11 @@ export default function OrderPanel({
                   </div>
                   <div className="flex flex-col items-center gap-1 shrink-0">
                     <div className="flex items-center gap-1">
-                      <button onClick={() => onUpdateQty(item.id, -1)} className="w-11 h-11 rounded-lg bg-card border flex items-center justify-center pos-btn">
+                      <button onClick={() => onUpdateQty(item.id, -1)} className="w-11 h-11 rounded-md bg-card border flex items-center justify-center pos-btn">
                         <Minus className="w-4 h-4" />
                       </button>
                       <span className="w-7 text-center text-sm font-bold">{item.quantity}</span>
-                      <button onClick={() => onUpdateQty(item.id, 1)} className="w-11 h-11 rounded-lg bg-card border flex items-center justify-center pos-btn">
+                      <button onClick={() => onUpdateQty(item.id, 1)} className="w-11 h-11 rounded-md bg-card border flex items-center justify-center pos-btn">
                         <Plus className="w-4 h-4" />
                       </button>
                     </div>
@@ -123,7 +123,7 @@ export default function OrderPanel({
       <div className="p-3 border-t space-y-2">
         <div className="flex justify-between items-center">
           <span className="font-semibold text-muted-foreground text-sm">TOPLAM</span>
-          <span className="text-2xl font-black text-primary">{total} ₺</span>
+          <span className="text-xl font-bold text-primary">{total} ₺</span>
         </div>
         {(totalPaid > 0 || totalPrepayment > 0) && (
           <div className="flex justify-between items-center text-xs">
@@ -134,14 +134,14 @@ export default function OrderPanel({
         <button
           onClick={onSendToKitchen}
           disabled={!selectedTable || orderItems.length === 0}
-          className="w-full py-4 rounded-xl bg-primary text-primary-foreground font-bold text-lg flex items-center justify-center gap-2 pos-btn disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-primary/20"
+          className="w-full py-4 rounded-md bg-primary text-primary-foreground font-bold text-lg flex items-center justify-center gap-2 pos-btn disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Send className="w-5 h-5" /> Mutfağa Gönder
         </button>
         {hasActiveOrders && onMarkReady && (
           <button
             onClick={onMarkReady}
-            className="w-full py-3 rounded-xl bg-pos-success text-pos-success-foreground font-bold text-sm flex items-center justify-center gap-2 pos-btn shadow-md"
+            className="w-full py-3 rounded-md bg-pos-success text-pos-success-foreground font-bold text-sm flex items-center justify-center gap-2 pos-btn"
           >
             <CheckCircle className="w-4 h-4" /> Sipariş Hazır
           </button>
@@ -149,7 +149,7 @@ export default function OrderPanel({
         <button
           onClick={onClearOrder}
           disabled={orderItems.length === 0}
-          className="w-full py-2.5 rounded-xl bg-muted text-muted-foreground font-semibold text-sm flex items-center justify-center gap-1.5 pos-btn disabled:opacity-40"
+          className="w-full py-2.5 rounded-md bg-muted text-muted-foreground font-semibold text-sm flex items-center justify-center gap-1.5 pos-btn disabled:opacity-40"
         >
           <Trash2 className="w-4 h-4" /> Temizle
         </button>

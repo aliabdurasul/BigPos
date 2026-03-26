@@ -299,7 +299,7 @@ export default function GarsonPOS() {
       <div className="h-screen flex flex-col overflow-hidden bg-background">
         {/* Mobile Header */}
         <header className="flex items-center gap-2 px-3 py-2 bg-card border-b shrink-0">
-          <button onClick={() => { logout(); navigate(`/pos/${session?.type === 'staff' ? session.slug : ''}`); }} className="p-2 rounded-lg hover:bg-muted pos-btn">
+          <button onClick={() => { logout(); navigate(`/pos/${session?.type === 'staff' ? session.slug : ''}`); }} className="p-2 rounded-md hover:bg-muted pos-btn">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <h1 className="text-base font-bold truncate">Garson POS</h1>
@@ -307,11 +307,11 @@ export default function GarsonPOS() {
           {selectedTable && (
             <div className="ml-auto flex items-center gap-1.5">
               {selectedTable.openedAt && (
-                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-muted text-muted-foreground text-[10px] font-medium">
+                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground text-[10px] font-medium">
                   <Clock className="w-3 h-3" /> {formatDuration(selectedTable.openedAt)}
                 </span>
               )}
-              <span className="px-2 py-1 rounded-lg bg-primary/10 text-primary font-bold text-xs">{selectedTable.name}</span>
+              <span className="px-2 py-1 rounded-md bg-primary/10 text-primary font-bold text-xs">{selectedTable.name}</span>
             </div>
           )}
         </header>
@@ -440,15 +440,15 @@ export default function GarsonPOS() {
         {/* Sent Item Warning */}
         {showSentWarning && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 animate-fade-in" onClick={() => setShowSentWarning(null)}>
-            <div className="bg-card rounded-2xl w-full max-w-sm mx-4 shadow-2xl animate-slide-up overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-card rounded-lg w-full max-w-sm mx-4 shadow-lg animate-slide-up overflow-hidden" onClick={e => e.stopPropagation()}>
               <div className="p-5 text-center">
                 <AlertTriangle className="w-12 h-12 text-pos-warning mx-auto mb-3" />
-                <h3 className="text-lg font-black mb-2">Dikkat!</h3>
+                <h3 className="text-lg font-bold mb-2">Dikkat!</h3>
                 <p className="text-sm text-muted-foreground">Bu ürün mutfağa gönderildi. Değiştirmek istediğinize emin misiniz?</p>
               </div>
               <div className="p-4 border-t flex gap-2">
-                <button onClick={() => setShowSentWarning(null)} className="flex-1 py-3 rounded-xl bg-muted font-semibold text-sm pos-btn">İptal</button>
-                <button onClick={confirmSentEdit} className="flex-1 py-3 rounded-xl bg-pos-danger text-pos-danger-foreground font-bold text-sm pos-btn">Evet, Değiştir</button>
+                <button onClick={() => setShowSentWarning(null)} className="flex-1 py-3 rounded-md bg-muted font-semibold text-sm pos-btn">İptal</button>
+                <button onClick={confirmSentEdit} className="flex-1 py-3 rounded-md bg-pos-danger text-pos-danger-foreground font-bold text-sm pos-btn">Evet, Değiştir</button>
               </div>
             </div>
           </div>
@@ -463,7 +463,7 @@ export default function GarsonPOS() {
     <div className="h-screen flex flex-col overflow-hidden bg-background">
       {/* Header */}
       <header className="flex items-center gap-2 px-3 py-2 bg-card border-b shrink-0">
-        <button onClick={() => { logout(); navigate(`/pos/${session?.type === 'staff' ? session.slug : ''}`); }} className="p-2 rounded-lg hover:bg-muted pos-btn">
+        <button onClick={() => { logout(); navigate(`/pos/${session?.type === 'staff' ? session.slug : ''}`); }} className="p-2 rounded-md hover:bg-muted pos-btn">
           <ArrowLeft className="w-5 h-5" />
         </button>
         <h1 className="text-lg font-bold">Garson POS</h1>
@@ -471,15 +471,15 @@ export default function GarsonPOS() {
         {selectedTable && (
           <div className="ml-auto flex items-center gap-2">
             {selectedTable.openedAt && (
-              <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-muted text-muted-foreground text-xs font-medium">
+              <span className="flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-muted-foreground text-xs font-medium">
                 <Clock className="w-3 h-3" /> {formatDuration(selectedTable.openedAt)}
               </span>
             )}
-            <span className="px-3 py-1 rounded-lg bg-primary/10 text-primary font-bold text-sm">{selectedTable.name}</span>
+            <span className="px-3 py-1 rounded-md bg-primary/10 text-primary font-bold text-sm">{selectedTable.name}</span>
           </div>
         )}
         {!selectedTable && (
-          <button onClick={() => { logout(); navigate(`/pos/${session?.type === 'staff' ? session.slug : ''}`); }} className="ml-auto p-2 rounded-lg hover:bg-muted pos-btn" title="Çıkış">
+          <button onClick={() => { logout(); navigate(`/pos/${session?.type === 'staff' ? session.slug : ''}`); }} className="ml-auto p-2 rounded-md hover:bg-muted pos-btn" title="Çıkış">
             <LogOut className="w-4 h-4" />
           </button>
         )}
@@ -553,15 +553,15 @@ export default function GarsonPOS() {
 
       {showSentWarning && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 animate-fade-in" onClick={() => setShowSentWarning(null)}>
-          <div className="bg-card rounded-2xl w-full max-w-sm mx-4 shadow-2xl animate-slide-up overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="bg-card rounded-lg w-full max-w-sm mx-4 shadow-lg animate-slide-up overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="p-5 text-center">
               <AlertTriangle className="w-12 h-12 text-pos-warning mx-auto mb-3" />
-              <h3 className="text-lg font-black mb-2">Dikkat!</h3>
+              <h3 className="text-lg font-bold mb-2">Dikkat!</h3>
               <p className="text-sm text-muted-foreground">Bu ürün mutfağa gönderildi. Değiştirmek istediğinize emin misiniz?</p>
             </div>
             <div className="p-4 border-t flex gap-2">
-              <button onClick={() => setShowSentWarning(null)} className="flex-1 py-3 rounded-xl bg-muted font-semibold text-sm pos-btn">İptal</button>
-              <button onClick={confirmSentEdit} className="flex-1 py-3 rounded-xl bg-pos-danger text-pos-danger-foreground font-bold text-sm pos-btn">Evet, Değiştir</button>
+              <button onClick={() => setShowSentWarning(null)} className="flex-1 py-3 rounded-md bg-muted font-semibold text-sm pos-btn">İptal</button>
+              <button onClick={confirmSentEdit} className="flex-1 py-3 rounded-md bg-pos-danger text-pos-danger-foreground font-bold text-sm pos-btn">Evet, Değiştir</button>
             </div>
           </div>
         </div>

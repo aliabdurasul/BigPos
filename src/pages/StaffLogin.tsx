@@ -106,7 +106,7 @@ export default function StaffLogin() {
   if (notFound) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-6 bg-background">
-        <h1 className="text-2xl font-black">Restoran bulunamadi</h1>
+        <h1 className="text-2xl font-bold">Restoran bulunamadi</h1>
         <p className="text-muted-foreground">Girdiginiz adres gecerli bir restorana ait degil.</p>
         <button onClick={() => navigate('/pos')} className="flex items-center gap-2 text-sm text-primary font-semibold">
           <ArrowLeft className="w-4 h-4" /> Ana Sayfa
@@ -119,8 +119,8 @@ export default function StaffLogin() {
   if (noStaff) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-6 bg-background">
-        <h1 className="text-2xl font-black">{restaurant?.name}</h1>
-        <div className="bg-card border rounded-2xl p-6 max-w-sm text-center">
+        <h1 className="text-2xl font-bold">{restaurant?.name}</h1>
+        <div className="bg-card border rounded-lg p-6 max-w-sm text-center">
           <p className="text-muted-foreground">Personel hesabi bulunamadi.</p>
           <p className="text-muted-foreground mt-1">Lutfen yonetici ile iletisime gecin.</p>
         </div>
@@ -135,7 +135,7 @@ export default function StaffLogin() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-8 p-6 bg-background">
       <div className="text-center">
-        <h1 className="text-3xl font-black tracking-tight mb-1">{restaurant?.name}</h1>
+        <h1 className="text-3xl font-bold tracking-tight mb-1">{restaurant?.name}</h1>
         <p className="text-muted-foreground">PIN kodunuzu girerek giris yapin</p>
       </div>
 
@@ -145,7 +145,7 @@ export default function StaffLogin() {
           {[0, 1, 2, 3].map(i => (
             <div
               key={i}
-              className={`w-14 h-14 rounded-2xl border-2 flex items-center justify-center text-2xl font-black transition-all ${
+              className={`w-14 h-14 rounded-lg border-2 flex items-center justify-center text-2xl font-bold transition-all ${
                 pin.length > i ? 'border-primary bg-primary/10 text-primary' : 'border-muted bg-card'
               }`}
             >
@@ -163,7 +163,7 @@ export default function StaffLogin() {
                 <button
                   key="back"
                   onClick={handleBackspace}
-                  className="h-16 rounded-2xl bg-muted font-bold text-lg pos-btn flex items-center justify-center"
+                  className="h-16 rounded-lg bg-muted font-bold text-lg pos-btn flex items-center justify-center"
                 >
                   &#8592;
                 </button>
@@ -173,7 +173,7 @@ export default function StaffLogin() {
               <button
                 key={key}
                 onClick={() => handleNumPad(key)}
-                className="h-16 rounded-2xl bg-card border font-bold text-xl pos-btn hover:bg-muted transition-colors"
+                className="h-16 rounded-lg bg-card border font-bold text-xl pos-btn hover:bg-muted transition-colors"
               >
                 {key}
               </button>
@@ -185,7 +185,7 @@ export default function StaffLogin() {
         <button
           onClick={handlePinLogin}
           disabled={pin.length < 4 || loading}
-          className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-black text-lg flex items-center justify-center gap-2 pos-btn disabled:opacity-40 shadow-lg shadow-primary/20"
+          className="w-full py-4 rounded-md bg-primary text-primary-foreground font-bold text-lg flex items-center justify-center gap-2 pos-btn disabled:opacity-40"
         >
           {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogIn className="w-5 h-5" />}
           Giris Yap

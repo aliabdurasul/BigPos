@@ -17,9 +17,9 @@ export default function CategorySidebar({ categories, selectedCategory, showSear
             <button
               key={c.id}
               onClick={() => onSelectCategory(c.id)}
-              className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold whitespace-nowrap pos-btn ${
+              className={`flex items-center gap-1.5 px-3 py-2.5 rounded-md text-xs font-semibold whitespace-nowrap pos-btn ${
                 selectedCategory === c.id && !showSearch
-                  ? 'bg-primary text-primary-foreground shadow-md'
+                  ? 'bg-primary text-primary-foreground'
                   : 'bg-muted/50 hover:bg-muted'
               }`}
             >
@@ -40,9 +40,9 @@ export default function CategorySidebar({ categories, selectedCategory, showSear
           <button
             key={c.id}
             onClick={() => onSelectCategory(c.id)}
-            className={`w-full flex items-center gap-2 px-3 py-3 rounded-xl text-sm font-semibold pos-btn ${
+            className={`w-full flex items-center gap-2 px-3 py-3 rounded-md text-sm font-semibold pos-btn ${
               selectedCategory === c.id && !showSearch
-                ? 'bg-primary text-primary-foreground shadow-md'
+                ? 'bg-primary text-primary-foreground'
                 : 'hover:bg-muted'
             }`}
           >

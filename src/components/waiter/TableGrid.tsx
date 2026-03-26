@@ -31,10 +31,10 @@ const TableCard = memo(function TableCard({ table, prepay, onSelect }: {
     <button
       onClick={onSelect}
       disabled={isLocked}
-      className={`relative flex flex-col items-center justify-center p-6 rounded-2xl border-2 min-h-[100px] ${TABLE_STATUS_BORDER_COLORS[table.status]} bg-card hover:shadow-lg pos-btn transition-shadow ${isLocked ? 'opacity-70 cursor-not-allowed' : ''}`}
+      className={`relative flex flex-col items-center justify-center p-6 rounded-lg border min-h-[100px] ${TABLE_STATUS_BORDER_COLORS[table.status]} bg-card hover:bg-muted/50 pos-btn transition-colors ${isLocked ? 'opacity-70 cursor-not-allowed' : ''}`}
     >
-      <div className={`absolute top-0 left-0 right-0 h-1.5 rounded-t-2xl ${TABLE_STATUS_COLORS[table.status]}`} />
-      <span className="text-2xl font-black text-foreground">{table.name.replace('Masa ', '')}</span>
+      <span className={`absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full ${TABLE_STATUS_COLORS[table.status]}`} />
+      <span className="text-2xl font-bold text-foreground">{table.name.replace('Masa ', '')}</span>
       <span className="text-xs text-muted-foreground mt-1">{table.name}</span>
       {table.currentTotal != null && table.currentTotal > 0 && (
         <span className="text-xs font-bold text-primary mt-1">{table.currentTotal} TL</span>
@@ -67,8 +67,8 @@ export default function TableGrid({ tables, orders, floors, selectedFloor, onSel
           <button
             key={f}
             onClick={() => onSelectFloor(f)}
-            className={`px-5 py-2.5 rounded-xl text-sm font-bold pos-btn ${
-              selectedFloor === f ? 'bg-primary text-primary-foreground shadow-md' : 'bg-card border hover:bg-muted'
+            className={`px-5 py-2.5 rounded-md text-sm font-bold pos-btn ${
+              selectedFloor === f ? 'bg-primary text-primary-foreground' : 'bg-card border hover:bg-muted'
             }`}
           >
             {f}
@@ -91,7 +91,7 @@ export default function TableGrid({ tables, orders, floors, selectedFloor, onSel
       </div>
       <div className="flex gap-4 mt-3 justify-center text-xs text-muted-foreground flex-wrap shrink-0">
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-pos-success" /> Boş</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Dolu</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-primary" /> Dolu</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-pos-warning" /> Ödeme Bekliyor</span>
       </div>
     </div>

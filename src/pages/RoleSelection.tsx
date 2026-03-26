@@ -55,7 +55,7 @@ export default function RoleSelection() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-10 p-6 bg-background">
       <div className="text-center">
-        <h1 className="text-4xl font-black tracking-tight mb-2">Lezzet-i Ala POS</h1>
+        <h1 className="text-4xl font-bold tracking-tight mb-2">Lezzet-i Ala POS</h1>
         <p className="text-muted-foreground text-lg">Giris turunu secin</p>
       </div>
 
@@ -63,10 +63,10 @@ export default function RoleSelection() {
         {/* Admin Login */}
         <button
           onClick={() => navigate('/login')}
-          className="w-full flex items-center gap-4 p-5 rounded-2xl border bg-card hover:bg-muted transition-colors active:scale-[0.98]"
+          className="w-full flex items-center gap-4 p-5 rounded-lg border bg-card hover:bg-muted transition-colors active:scale-[0.98]"
         >
-          <div className="w-14 h-14 rounded-xl bg-pos-info/10 flex items-center justify-center shrink-0">
-            <Shield className="w-7 h-7 text-pos-info" />
+          <div className="w-14 h-14 rounded-lg bg-muted flex items-center justify-center shrink-0">
+            <Shield className="w-7 h-7 text-primary" />
           </div>
           <div className="text-left flex-1">
             <p className="font-bold text-lg">Yonetici Girisi</p>
@@ -76,9 +76,9 @@ export default function RoleSelection() {
         </button>
 
         {/* POS Staff Login */}
-        <div className="p-5 rounded-2xl border bg-card space-y-3">
+        <div className="p-5 rounded-lg border bg-card space-y-3">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+            <div className="w-14 h-14 rounded-lg bg-muted flex items-center justify-center shrink-0">
               <Monitor className="w-7 h-7 text-primary" />
             </div>
             <div className="text-left flex-1">
@@ -98,7 +98,7 @@ export default function RoleSelection() {
                 <button
                   key={r.id}
                   onClick={() => navigate(`/pos/${encodeURIComponent(r.slug)}`)}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border bg-background hover:bg-muted transition-colors text-left active:scale-[0.98]"
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-md border bg-background hover:bg-muted transition-colors text-left active:scale-[0.98]"
                 >
                   <Store className="w-5 h-5 text-primary shrink-0" />
                   <div className="flex-1 min-w-0">
@@ -120,12 +120,12 @@ export default function RoleSelection() {
               onChange={e => setSlug(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handlePOSEntry()}
               placeholder="veya restoran kodu yazin..."
-              className="flex-1 px-4 py-3 rounded-xl border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="flex-1 px-4 py-3 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             />
             <button
               onClick={handlePOSEntry}
               disabled={!slug.trim()}
-              className="px-5 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm pos-btn disabled:opacity-40 flex items-center gap-1.5"
+              className="px-5 py-3 rounded-md bg-primary text-primary-foreground font-bold text-sm pos-btn disabled:opacity-40 flex items-center gap-1.5"
             >
               <ArrowRight className="w-4 h-4" /> Git
             </button>

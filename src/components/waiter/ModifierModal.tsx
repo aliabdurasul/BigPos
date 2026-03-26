@@ -58,7 +58,7 @@ export default function ModifierModal({ item, modifierGroups, productModifierMap
   return (
     <div className="fixed inset-0 bg-black/40 z-50 animate-fade-in flex items-end sm:items-center justify-center" onClick={onCancel}>
       <div
-        className="bg-card w-full sm:max-w-md sm:mx-4 sm:rounded-2xl rounded-t-2xl shadow-2xl animate-slide-up overflow-hidden max-h-[85vh] flex flex-col"
+        className="bg-card w-full sm:max-w-md sm:mx-4 sm:rounded-lg rounded-t-2xl shadow-lg animate-slide-up overflow-hidden max-h-[85vh] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         {/* Drag handle (mobile) */}
@@ -67,9 +67,9 @@ export default function ModifierModal({ item, modifierGroups, productModifierMap
         </div>
 
         {/* Header */}
-        <div className="px-4 pt-2 pb-3 border-b bg-primary/5">
-          <h3 className="text-lg font-black">{item.name}</h3>
-          <p className="text-primary font-bold">{item.price} ₺</p>
+        <div className="px-4 pt-2 pb-3 border-b">
+          <h3 className="text-lg font-bold">{item.name}</h3>
+          <p className="text-primary font-semibold">{item.price} ₺</p>
         </div>
 
         {/* Scrollable content */}
@@ -80,14 +80,14 @@ export default function ModifierModal({ item, modifierGroups, productModifierMap
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setQuantity(q => Math.max(1, q - 1))}
-                className="w-11 h-11 rounded-xl bg-muted flex items-center justify-center pos-btn touch-manipulation active:scale-95"
+                className="w-11 h-11 rounded-md bg-muted flex items-center justify-center pos-btn touch-manipulation active:scale-95"
               >
                 <Minus className="w-5 h-5" />
               </button>
-              <span className="text-2xl font-black w-10 text-center tabular-nums">{quantity}</span>
+              <span className="text-2xl font-bold w-10 text-center tabular-nums">{quantity}</span>
               <button
                 onClick={() => setQuantity(q => q + 1)}
-                className="w-11 h-11 rounded-xl bg-primary text-primary-foreground flex items-center justify-center pos-btn touch-manipulation active:scale-95"
+                className="w-11 h-11 rounded-md bg-primary text-primary-foreground flex items-center justify-center pos-btn touch-manipulation active:scale-95"
               >
                 <Plus className="w-5 h-5" />
               </button>
@@ -105,10 +105,10 @@ export default function ModifierModal({ item, modifierGroups, productModifierMap
                     <button
                       key={opt.id}
                       onClick={() => toggleModifier(group.id, opt.id, group.type)}
-                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium pos-btn border-2 touch-manipulation min-h-[44px] ${
+                      className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium pos-btn border touch-manipulation min-h-[44px] ${
                         isSelected
                           ? 'border-primary bg-primary/10 text-primary'
-                          : 'border-transparent bg-muted/50 hover:bg-muted'
+                          : 'border-border bg-muted/30 hover:bg-muted'
                       }`}
                     >
                       <span className="flex items-center gap-2">
@@ -134,19 +134,19 @@ export default function ModifierModal({ item, modifierGroups, productModifierMap
               value={itemNote}
               onChange={e => setItemNote(e.target.value)}
               placeholder="Örn: Az pişmiş, extra sos..."
-              className="w-full px-4 py-3 rounded-xl border bg-muted/30 text-sm min-h-[44px]"
+              className="w-full px-4 py-3 rounded-md border bg-muted/30 text-sm min-h-[44px]"
             />
           </div>
         </div>
 
         {/* Footer with live total */}
         <div className="p-4 border-t flex gap-2 shrink-0">
-          <button onClick={onCancel} className="py-3 px-5 rounded-xl bg-muted font-semibold text-sm pos-btn touch-manipulation min-h-[48px]">
+          <button onClick={onCancel} className="py-3 px-5 rounded-md bg-muted font-semibold text-sm pos-btn touch-manipulation min-h-[48px]">
             İptal
           </button>
           <button
             onClick={handleConfirm}
-            className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm pos-btn shadow-lg shadow-primary/20 touch-manipulation min-h-[48px] flex items-center justify-center gap-2"
+            className="flex-1 py-3 rounded-md bg-primary text-primary-foreground font-bold text-sm pos-btn touch-manipulation min-h-[48px] flex items-center justify-center gap-2"
           >
             <span>Ekle</span>
             <span className="opacity-80">·</span>

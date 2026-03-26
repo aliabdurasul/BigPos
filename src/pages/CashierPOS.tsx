@@ -119,18 +119,18 @@ export default function CashierPOS() {
     <div className="h-screen flex flex-col overflow-hidden bg-background">
       {/* Header */}
       <header className="flex items-center gap-2 px-4 py-3 bg-card border-b shrink-0">
-        <button onClick={() => { logout(); navigate(`/pos/${session?.type === 'staff' ? session.slug : ''}`); }} className="p-2 rounded-lg hover:bg-muted pos-btn">
+        <button onClick={() => { logout(); navigate(`/pos/${session?.type === 'staff' ? session.slug : ''}`); }} className="p-2 rounded-md hover:bg-muted pos-btn">
           <ArrowLeft className="w-5 h-5" />
         </button>
         <DollarSign className="w-6 h-6 text-primary" />
-        <h1 className="text-xl font-black">Kasa POS</h1>
+        <h1 className="text-xl font-bold">Kasa POS</h1>
         {staffName && <span className="text-xs text-muted-foreground font-medium ml-1">({staffName})</span>}
         {waitingPaymentCount > 0 && (
-          <span className="ml-auto px-3 py-1 rounded-full bg-pos-warning text-pos-warning-foreground text-sm font-bold">
+          <span className="ml-auto px-3 py-1 rounded-md bg-pos-warning text-pos-warning-foreground text-sm font-bold">
             {waitingPaymentCount} ödeme bekliyor
           </span>
         )}
-        <button onClick={() => { logout(); navigate(`/pos/${session?.type === 'staff' ? session.slug : ''}`); }} className="ml-auto p-2 rounded-lg hover:bg-muted pos-btn" title="Çıkış">
+        <button onClick={() => { logout(); navigate(`/pos/${session?.type === 'staff' ? session.slug : ''}`); }} className="ml-auto p-2 rounded-md hover:bg-muted pos-btn" title="Çıkış">
           <LogOut className="w-4 h-4" />
         </button>
       </header>
@@ -142,8 +142,8 @@ export default function CashierPOS() {
             <button
               key={f}
               onClick={() => setSelectedFloor(f)}
-              className={`px-5 py-2.5 rounded-xl text-sm font-bold pos-btn ${
-                selectedFloor === f ? 'bg-primary text-primary-foreground shadow-md' : 'bg-card border hover:bg-muted'
+              className={`px-5 py-2.5 rounded-md text-sm font-bold pos-btn ${
+                selectedFloor === f ? 'bg-primary text-primary-foreground' : 'bg-card border hover:bg-muted'
               }`}
             >
               {f}
@@ -167,12 +167,12 @@ export default function CashierPOS() {
               <button
                 key={t.id}
                 onClick={() => handleTableTap(t)}
-                className={`relative flex flex-col items-center justify-center p-4 rounded-2xl border-2 ${TABLE_STATUS_BORDER_COLORS[t.status]} bg-card pos-btn transition-all ${
-                  isWaiting ? 'hover:shadow-lg ring-2 ring-pos-warning/40' : hasOrder ? 'hover:shadow-md' : 'opacity-60'
+                className={`relative flex flex-col items-center justify-center p-4 rounded-lg border ${TABLE_STATUS_BORDER_COLORS[t.status]} bg-card pos-btn transition-all ${
+                  isWaiting ? 'hover:bg-muted/50 border-pos-warning/40' : hasOrder ? 'hover:bg-muted/50' : 'opacity-60'
                 }`}
               >
                 <span className={`absolute top-2 right-2 w-3 h-3 rounded-full ${TABLE_STATUS_COLORS[t.status]}`} />
-                <span className="text-2xl font-black text-foreground">{t.name.replace('Masa ', '')}</span>
+                <span className="text-2xl font-bold text-foreground">{t.name.replace('Masa ', '')}</span>
                 <span className="text-xs text-muted-foreground mt-0.5">{t.name}</span>
 
                 {order && (
@@ -180,10 +180,10 @@ export default function CashierPOS() {
                     {hasAnyPayment ? (
                       <>
                         <span className="text-[10px] text-muted-foreground line-through mt-1">{order.total} TL</span>
-                        <span className="text-sm font-black text-pos-warning">{remaining} TL kalan</span>
+                        <span className="text-sm font-bold text-pos-warning">{remaining} TL kalan</span>
                       </>
                     ) : (
-                      <span className="text-sm font-black text-primary mt-1">{order.total} TL</span>
+                      <span className="text-sm font-bold text-primary mt-1">{order.total} TL</span>
                     )}
                   </>
                 )}
@@ -201,7 +201,7 @@ export default function CashierPOS() {
                 {hasOrder && t.status === 'occupied' && (
                   <button
                     onClick={(e) => { e.stopPropagation(); handleMarkReady(t.id); }}
-                    className="mt-1.5 px-2.5 py-1 rounded-lg bg-pos-success text-pos-success-foreground text-[10px] font-bold pos-btn"
+                    className="mt-1.5 px-2.5 py-1 rounded-md bg-pos-success text-pos-success-foreground text-[10px] font-bold pos-btn"
                   >
                     ✅ Hazır
                   </button>
@@ -214,7 +214,7 @@ export default function CashierPOS() {
         {/* Legend */}
         <div className="flex gap-4 mt-3 justify-center text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-pos-success" /> Boş</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Dolu</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-primary" /> Dolu</span>
           <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-pos-warning" /> Ödeme Bekliyor</span>
         </div>
       </div>

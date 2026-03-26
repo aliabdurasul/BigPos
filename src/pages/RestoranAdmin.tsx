@@ -185,14 +185,14 @@ export default function RestoranAdmin() {
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background">
       <header className="flex items-center gap-3 px-4 py-3 bg-card border-b shrink-0">
-        <button onClick={handleLogout} className="p-2 rounded-lg hover:bg-muted pos-btn">
+        <button onClick={handleLogout} className="p-2 rounded-md hover:bg-muted pos-btn">
           <ArrowLeft className="w-5 h-5" />
         </button>
         <Store className="w-5 h-5 text-primary" />
-        <h1 className="text-xl font-black">Restoran Yonetimi</h1>
+        <h1 className="text-xl font-bold">Restoran Yonetimi</h1>
         <div className="ml-auto flex items-center gap-2">
           {staffName && <span className="text-sm text-muted-foreground font-medium">{staffName}</span>}
-          <button onClick={handleLogout} className="p-2 rounded-lg hover:bg-muted pos-btn" title="Cikis Yap">
+          <button onClick={handleLogout} className="p-2 rounded-md hover:bg-muted pos-btn" title="Cikis Yap">
             <LogOut className="w-4 h-4" />
           </button>
         </div>
@@ -204,8 +204,8 @@ export default function RestoranAdmin() {
             <button
               key={t.id}
               onClick={() => setActiveTab(t.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold pos-btn ${
-                activeTab === t.id ? 'bg-primary text-primary-foreground shadow-md' : 'hover:bg-muted'
+              className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-md text-sm font-bold pos-btn ${
+                activeTab === t.id ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
               }`}
             >
               {t.icon} {t.label}
@@ -219,27 +219,27 @@ export default function RestoranAdmin() {
           {activeTab === 'menu' && (
             <div>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-black">Menu Yonetimi</h2>
-                <button onClick={() => openMenuDialog()} className="px-5 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm flex items-center gap-1.5 pos-btn shadow-md">
+                <h2 className="text-lg font-bold">Menu Yonetimi</h2>
+                <button onClick={() => openMenuDialog()} className="px-5 py-3 rounded-md bg-primary text-primary-foreground font-bold text-sm flex items-center gap-1.5 pos-btn">
                   <Plus className="w-4 h-4" /> Yeni Urun
                 </button>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {menuItems.map(item => (
-                  <div key={item.id} className="flex items-center justify-between p-4 bg-card rounded-xl border hover:shadow-md transition-shadow">
+                  <div key={item.id} className="flex items-center justify-between p-4 bg-card rounded-lg border hover:bg-muted/50 transition-colors">
                     <div className="min-w-0 flex-1">
                       <p className="font-bold text-sm">{item.name}</p>
                       {item.description && <p className="text-xs text-muted-foreground truncate">{item.description}</p>}
-                      <p className="text-primary font-black text-sm">{item.price} TL</p>
+                      <p className="text-primary font-bold text-sm">{item.price} TL</p>
                       <p className="text-xs text-muted-foreground">{categories.find(c => c.id === item.categoryId)?.name}</p>
                       {item.portionInfo && <p className="text-[10px] text-muted-foreground">Porsiyon: {item.portionInfo}</p>}
                       {item.allergenInfo && <p className="text-[10px] text-pos-warning">Alerjen: {item.allergenInfo}</p>}
                     </div>
                     <div className="flex flex-col gap-1 shrink-0">
-                      <button onClick={() => openMenuDialog(item)} className="p-2 text-muted-foreground hover:bg-muted rounded-xl pos-btn">
+                      <button onClick={() => openMenuDialog(item)} className="p-2 text-muted-foreground hover:bg-muted rounded-md pos-btn">
                         <Edit3 className="w-4 h-4" />
                       </button>
-                      <button onClick={() => removeMenuItem(item.id)} className="p-2 text-destructive hover:bg-destructive/10 rounded-xl pos-btn">
+                      <button onClick={() => removeMenuItem(item.id)} className="p-2 text-destructive hover:bg-destructive/10 rounded-md pos-btn">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -251,19 +251,19 @@ export default function RestoranAdmin() {
 
           {activeTab === 'kategori' && (
             <div>
-              <h2 className="text-lg font-black mb-4">Kategori Yonetimi</h2>
+              <h2 className="text-lg font-bold mb-4">Kategori Yonetimi</h2>
               <div className="flex gap-2 mb-6">
-                <input value={newCategoryIcon} onChange={e => setNewCategoryIcon(e.target.value)} placeholder="Ikon" className="px-4 py-3 rounded-xl border bg-card text-sm w-24" />
-                <input value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} placeholder="Kategori adi" className="px-4 py-3 rounded-xl border bg-card text-sm flex-1" />
-                <button onClick={handleAddCategory} className="px-5 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm flex items-center gap-1.5 pos-btn shadow-md">
+                <input value={newCategoryIcon} onChange={e => setNewCategoryIcon(e.target.value)} placeholder="Ikon" className="px-4 py-3 rounded-md border bg-card text-sm w-24" />
+                <input value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} placeholder="Kategori adi" className="px-4 py-3 rounded-md border bg-card text-sm flex-1" />
+                <button onClick={handleAddCategory} className="px-5 py-3 rounded-md bg-primary text-primary-foreground font-bold text-sm flex items-center gap-1.5 pos-btn">
                   <Plus className="w-4 h-4" /> Ekle
                 </button>
               </div>
               <div className="space-y-2">
                 {categories.map(c => (
-                  <div key={c.id} className="flex items-center justify-between p-4 bg-card rounded-xl border">
+                  <div key={c.id} className="flex items-center justify-between p-4 bg-card rounded-lg border">
                     <span className="font-bold flex items-center gap-2">{c.icon} {c.name}</span>
-                    <button onClick={() => removeCategory(c.id)} className="p-2.5 text-destructive hover:bg-destructive/10 rounded-xl pos-btn">
+                    <button onClick={() => removeCategory(c.id)} className="p-2.5 text-destructive hover:bg-destructive/10 rounded-md pos-btn">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -275,7 +275,7 @@ export default function RestoranAdmin() {
           {activeTab === 'modifierler' && (
             <div>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-black">Modifier Yonetimi</h2>
+                <h2 className="text-lg font-bold">Modifier Yonetimi</h2>
                 <button
                   onClick={async () => {
                     try {
@@ -289,15 +289,15 @@ export default function RestoranAdmin() {
                       toast.success('Hazır şablonlar eklendi');
                     } catch { toast.error('Şablon eklenemedi'); }
                   }}
-                  className="px-4 py-2.5 rounded-xl bg-muted font-semibold text-sm pos-btn"
+                  className="px-4 py-2.5 rounded-md bg-muted font-semibold text-sm pos-btn"
                 >
                   ✨ Hazır Şablonlar
                 </button>
               </div>
               {/* Add new group */}
               <div className="flex gap-2 mb-6">
-                <input value={newModGroupName} onChange={e => setNewModGroupName(e.target.value)} placeholder="Grup adı (ör: Porsiyon)" className="px-4 py-3 rounded-xl border bg-card text-sm flex-1" />
-                <select value={newModGroupType} onChange={e => setNewModGroupType(e.target.value as 'checkbox' | 'radio')} className="px-4 py-3 rounded-xl border bg-card text-sm">
+                <input value={newModGroupName} onChange={e => setNewModGroupName(e.target.value)} placeholder="Grup adı (ör: Porsiyon)" className="px-4 py-3 rounded-md border bg-card text-sm flex-1" />
+                <select value={newModGroupType} onChange={e => setNewModGroupType(e.target.value as 'checkbox' | 'radio')} className="px-4 py-3 rounded-md border bg-card text-sm">
                   <option value="checkbox">Çoklu Seçim</option>
                   <option value="radio">Tekli Seçim</option>
                 </select>
@@ -308,7 +308,7 @@ export default function RestoranAdmin() {
                     setNewModGroupName('');
                     toast.success('Modifier grubu eklendi');
                   } catch { toast.error('Grup eklenemedi'); }
-                }} className="px-5 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm flex items-center gap-1.5 pos-btn shadow-md">
+                }} className="px-5 py-3 rounded-md bg-primary text-primary-foreground font-bold text-sm flex items-center gap-1.5 pos-btn">
                   <Plus className="w-4 h-4" /> Ekle
                 </button>
               </div>
@@ -317,7 +317,7 @@ export default function RestoranAdmin() {
                 {modifierGroups.map(group => {
                   const isExpanded = expandedModGroup === group.id;
                   return (
-                    <div key={group.id} className="bg-card rounded-xl border overflow-hidden">
+                    <div key={group.id} className="bg-card rounded-lg border overflow-hidden">
                       <div className="flex items-center justify-between p-4">
                         <button onClick={() => setExpandedModGroup(isExpanded ? null : group.id)} className="flex items-center gap-2 flex-1 text-left pos-btn">
                           {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
@@ -327,7 +327,7 @@ export default function RestoranAdmin() {
                         </button>
                         <button onClick={async () => {
                           try { await removeModifierGroup(group.id); toast.success('Grup silindi'); } catch { toast.error('Silinemedi'); }
-                        }} className="p-2.5 text-destructive hover:bg-destructive/10 rounded-xl pos-btn">
+                        }} className="p-2.5 text-destructive hover:bg-destructive/10 rounded-md pos-btn">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -376,19 +376,19 @@ export default function RestoranAdmin() {
 
           {activeTab === 'masa' && (
             <div>
-              <h2 className="text-lg font-black mb-4">Masa Yonetimi</h2>
+              <h2 className="text-lg font-bold mb-4">Masa Yonetimi</h2>
               <div className="flex gap-2 mb-6">
-                <input value={newTableName} onChange={e => setNewTableName(e.target.value)} placeholder="Masa adi (or: Masa 13)" className="px-4 py-3 rounded-xl border bg-card text-sm flex-1" />
-                <select value={newTableFloor} onChange={e => setNewTableFloor(e.target.value)} className="px-4 py-3 rounded-xl border bg-card text-sm">
+                <input value={newTableName} onChange={e => setNewTableName(e.target.value)} placeholder="Masa adi (or: Masa 13)" className="px-4 py-3 rounded-md border bg-card text-sm flex-1" />
+                <select value={newTableFloor} onChange={e => setNewTableFloor(e.target.value)} className="px-4 py-3 rounded-md border bg-card text-sm">
                   {floors.map(f => <option key={f} value={f}>{f}</option>)}
                 </select>
-                <button onClick={handleAddTable} className="px-5 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm flex items-center gap-1.5 pos-btn shadow-md">
+                <button onClick={handleAddTable} className="px-5 py-3 rounded-md bg-primary text-primary-foreground font-bold text-sm flex items-center gap-1.5 pos-btn">
                   <Plus className="w-4 h-4" /> Ekle
                 </button>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                 {tables.map(t => (
-                  <div key={t.id} className="flex items-center justify-between p-4 bg-card rounded-xl border">
+                  <div key={t.id} className="flex items-center justify-between p-4 bg-card rounded-lg border">
                     <div className="flex items-center gap-2">
                       <span className={`w-3 h-3 rounded-full ${t.status === 'available' ? 'bg-pos-success' : t.status === 'waiting_payment' ? 'bg-pos-warning' : 'bg-pos-danger'}`} />
                       <div>
@@ -396,7 +396,7 @@ export default function RestoranAdmin() {
                         <p className="text-[10px] text-muted-foreground">{t.floor}</p>
                       </div>
                     </div>
-                    <button onClick={() => removeTable(t.id)} className="p-2.5 text-destructive hover:bg-destructive/10 rounded-xl pos-btn">
+                    <button onClick={() => removeTable(t.id)} className="p-2.5 text-destructive hover:bg-destructive/10 rounded-md pos-btn">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -407,18 +407,18 @@ export default function RestoranAdmin() {
 
           {activeTab === 'katlar' && (
             <div>
-              <h2 className="text-lg font-black mb-4">Kat Yonetimi</h2>
+              <h2 className="text-lg font-bold mb-4">Kat Yonetimi</h2>
               <div className="flex gap-2 mb-6">
-                <input value={newFloorName} onChange={e => setNewFloorName(e.target.value)} placeholder="Kat adi (or: Bahce)" className="px-4 py-3 rounded-xl border bg-card text-sm flex-1" />
-                <button onClick={handleAddFloor} className="px-5 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm flex items-center gap-1.5 pos-btn shadow-md">
+                <input value={newFloorName} onChange={e => setNewFloorName(e.target.value)} placeholder="Kat adi (or: Bahce)" className="px-4 py-3 rounded-md border bg-card text-sm flex-1" />
+                <button onClick={handleAddFloor} className="px-5 py-3 rounded-md bg-primary text-primary-foreground font-bold text-sm flex items-center gap-1.5 pos-btn">
                   <Plus className="w-4 h-4" /> Ekle
                 </button>
               </div>
               <div className="space-y-2">
                 {floors.map(f => (
-                  <div key={f} className="flex items-center justify-between p-4 bg-card rounded-xl border">
+                  <div key={f} className="flex items-center justify-between p-4 bg-card rounded-lg border">
                     <span className="font-bold text-sm">{f}</span>
-                    <button onClick={() => removeFloor(f)} className="p-2.5 text-destructive hover:bg-destructive/10 rounded-xl pos-btn">
+                    <button onClick={() => removeFloor(f)} className="p-2.5 text-destructive hover:bg-destructive/10 rounded-md pos-btn">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -430,14 +430,14 @@ export default function RestoranAdmin() {
           {activeTab === 'personel' && (
             <div>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-black">Personel Yonetimi</h2>
-                <button onClick={() => setShowStaffDialog(true)} className="px-5 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm flex items-center gap-1.5 pos-btn shadow-md">
+                <h2 className="text-lg font-bold">Personel Yonetimi</h2>
+                <button onClick={() => setShowStaffDialog(true)} className="px-5 py-3 rounded-md bg-primary text-primary-foreground font-bold text-sm flex items-center gap-1.5 pos-btn">
                   <Plus className="w-4 h-4" /> Yeni Personel
                 </button>
               </div>
               <div className="space-y-3">
                 {staff.map(s => (
-                  <div key={s.id} className="flex items-center justify-between p-4 bg-card rounded-xl border">
+                  <div key={s.id} className="flex items-center justify-between p-4 bg-card rounded-lg border">
                     <div className="flex items-center gap-3">
                       <div>
                         <span className="font-bold text-sm">{s.name}</span>
@@ -445,8 +445,8 @@ export default function RestoranAdmin() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono bg-muted px-2 py-1 rounded-lg">PIN: {s.pin}</span>
-                      <button onClick={() => removeStaff(s.id)} className="p-2.5 text-destructive hover:bg-destructive/10 rounded-xl pos-btn">
+                      <span className="text-xs font-mono bg-muted px-2 py-1 rounded-md">PIN: {s.pin}</span>
+                      <button onClick={() => removeStaff(s.id)} className="p-2.5 text-destructive hover:bg-destructive/10 rounded-md pos-btn">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -464,49 +464,49 @@ export default function RestoranAdmin() {
       {/* Menu Item Dialog */}
       {showMenuDialog && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setShowMenuDialog(false)}>
-          <div className="bg-card rounded-2xl w-full max-w-lg mx-4 shadow-2xl overflow-hidden max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className="bg-card rounded-lg w-full max-w-lg mx-4 shadow-lg overflow-hidden max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b">
-              <h3 className="font-black text-base">{editingItem ? 'Urun Duzenle' : 'Yeni Urun Ekle'}</h3>
-              <button onClick={() => setShowMenuDialog(false)} className="p-2 rounded-lg hover:bg-muted pos-btn">
+              <h3 className="font-bold text-base">{editingItem ? 'Urun Duzenle' : 'Yeni Urun Ekle'}</h3>
+              <button onClick={() => setShowMenuDialog(false)} className="p-2 rounded-md hover:bg-muted pos-btn">
                 <X className="w-4 h-4" />
               </button>
             </div>
             <div className="p-4 space-y-3 overflow-y-auto flex-1">
               <div>
                 <label className="text-xs font-bold text-muted-foreground uppercase">Urun Adi *</label>
-                <input value={menuForm.name} onChange={e => setMenuForm(p => ({ ...p, name: e.target.value }))} className="w-full px-4 py-3 rounded-xl border bg-card text-sm mt-1" />
+                <input value={menuForm.name} onChange={e => setMenuForm(p => ({ ...p, name: e.target.value }))} className="w-full px-4 py-3 rounded-md border bg-card text-sm mt-1" />
               </div>
               <div>
                 <label className="text-xs font-bold text-muted-foreground uppercase">Aciklama</label>
-                <input value={menuForm.description} onChange={e => setMenuForm(p => ({ ...p, description: e.target.value }))} className="w-full px-4 py-3 rounded-xl border bg-card text-sm mt-1" />
+                <input value={menuForm.description} onChange={e => setMenuForm(p => ({ ...p, description: e.target.value }))} className="w-full px-4 py-3 rounded-md border bg-card text-sm mt-1" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-bold text-muted-foreground uppercase">Fiyat (TL) *</label>
-                  <input type="number" value={menuForm.price} onChange={e => setMenuForm(p => ({ ...p, price: e.target.value }))} className="w-full px-4 py-3 rounded-xl border bg-card text-sm mt-1" />
+                  <input type="number" value={menuForm.price} onChange={e => setMenuForm(p => ({ ...p, price: e.target.value }))} className="w-full px-4 py-3 rounded-md border bg-card text-sm mt-1" />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-muted-foreground uppercase">Kategori</label>
-                  <select value={menuForm.categoryId} onChange={e => setMenuForm(p => ({ ...p, categoryId: e.target.value }))} className="w-full px-4 py-3 rounded-xl border bg-card text-sm mt-1">
+                  <select value={menuForm.categoryId} onChange={e => setMenuForm(p => ({ ...p, categoryId: e.target.value }))} className="w-full px-4 py-3 rounded-md border bg-card text-sm mt-1">
                     {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
               </div>
               <div>
                 <label className="text-xs font-bold text-muted-foreground uppercase">Porsiyon Bilgisi</label>
-                <input value={menuForm.portionInfo} onChange={e => setMenuForm(p => ({ ...p, portionInfo: e.target.value }))} placeholder="or: 200g, 2 kisilik" className="w-full px-4 py-3 rounded-xl border bg-card text-sm mt-1" />
+                <input value={menuForm.portionInfo} onChange={e => setMenuForm(p => ({ ...p, portionInfo: e.target.value }))} placeholder="or: 200g, 2 kisilik" className="w-full px-4 py-3 rounded-md border bg-card text-sm mt-1" />
               </div>
               <div>
                 <label className="text-xs font-bold text-muted-foreground uppercase">Alerjen Bilgisi</label>
-                <input value={menuForm.allergenInfo} onChange={e => setMenuForm(p => ({ ...p, allergenInfo: e.target.value }))} placeholder="or: Gluten, Sut, Yumurta" className="w-full px-4 py-3 rounded-xl border bg-card text-sm mt-1" />
+                <input value={menuForm.allergenInfo} onChange={e => setMenuForm(p => ({ ...p, allergenInfo: e.target.value }))} placeholder="or: Gluten, Sut, Yumurta" className="w-full px-4 py-3 rounded-md border bg-card text-sm mt-1" />
               </div>
               <div>
                 <label className="text-xs font-bold text-muted-foreground uppercase">Aci Seviyesi (0-5)</label>
-                <input type="number" min="0" max="5" value={menuForm.spiceLevel} onChange={e => setMenuForm(p => ({ ...p, spiceLevel: Number(e.target.value) }))} className="w-full px-4 py-3 rounded-xl border bg-card text-sm mt-1" />
+                <input type="number" min="0" max="5" value={menuForm.spiceLevel} onChange={e => setMenuForm(p => ({ ...p, spiceLevel: Number(e.target.value) }))} className="w-full px-4 py-3 rounded-md border bg-card text-sm mt-1" />
               </div>
               <div>
                 <label className="text-xs font-bold text-muted-foreground uppercase">Mutfak Notu</label>
-                <input value={menuForm.kitchenNote} onChange={e => setMenuForm(p => ({ ...p, kitchenNote: e.target.value }))} placeholder="or: Az pisirmek, extra sos" className="w-full px-4 py-3 rounded-xl border bg-card text-sm mt-1" />
+                <input value={menuForm.kitchenNote} onChange={e => setMenuForm(p => ({ ...p, kitchenNote: e.target.value }))} placeholder="or: Az pisirmek, extra sos" className="w-full px-4 py-3 rounded-md border bg-card text-sm mt-1" />
               </div>
               {/* Modifier Groups */}
               {modifierGroups.length > 0 && (
@@ -520,10 +520,10 @@ export default function RestoranAdmin() {
                           key={g.id}
                           type="button"
                           onClick={() => setMenuModifierIds(prev => isChecked ? prev.filter(id => id !== g.id) : [...prev, g.id])}
-                          className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm pos-btn border-2 ${isChecked ? 'border-primary bg-primary/10 text-primary' : 'border-transparent bg-muted/50 hover:bg-muted'}`}
+                          className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-md text-sm pos-btn border ${isChecked ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-muted/30 hover:bg-muted'}`}
                         >
                           <span className={`w-4 h-4 rounded border-2 flex items-center justify-center ${isChecked ? 'border-primary bg-primary' : 'border-muted-foreground/30'}`}>
-                            {isChecked && <span className="text-primary-foreground text-[10px] font-black">✓</span>}
+                            {isChecked && <span className="text-primary-foreground text-[10px] font-bold">✓</span>}
                           </span>
                           <span className="font-medium">{g.name}</span>
                           <span className="text-xs text-muted-foreground ml-auto">{g.type === 'radio' ? 'Tekli' : 'Çoklu'} · {g.options.length} seçenek</span>
@@ -535,8 +535,8 @@ export default function RestoranAdmin() {
               )}
             </div>
             <div className="p-4 border-t flex gap-2">
-              <button onClick={() => setShowMenuDialog(false)} className="flex-1 py-3 rounded-xl bg-muted font-semibold text-sm pos-btn">Iptal</button>
-              <button onClick={handleSaveMenuItem} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm pos-btn shadow-lg">{editingItem ? 'Guncelle' : 'Ekle'}</button>
+              <button onClick={() => setShowMenuDialog(false)} className="flex-1 py-3 rounded-md bg-muted font-semibold text-sm pos-btn">Iptal</button>
+              <button onClick={handleSaveMenuItem} className="flex-1 py-3 rounded-md bg-primary text-primary-foreground font-bold text-sm pos-btn">{editingItem ? 'Guncelle' : 'Ekle'}</button>
             </div>
           </div>
         </div>
@@ -545,21 +545,21 @@ export default function RestoranAdmin() {
       {/* Staff Dialog */}
       {showStaffDialog && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setShowStaffDialog(false)}>
-          <div className="bg-card rounded-2xl w-full max-w-sm mx-4 shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="bg-card rounded-lg w-full max-w-sm mx-4 shadow-lg overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b">
-              <h3 className="font-black text-base">Yeni Personel</h3>
-              <button onClick={() => setShowStaffDialog(false)} className="p-2 rounded-lg hover:bg-muted pos-btn">
+              <h3 className="font-bold text-base">Yeni Personel</h3>
+              <button onClick={() => setShowStaffDialog(false)} className="p-2 rounded-md hover:bg-muted pos-btn">
                 <X className="w-4 h-4" />
               </button>
             </div>
             <div className="p-4 space-y-3">
               <div>
                 <label className="text-xs font-bold text-muted-foreground uppercase">Ad Soyad *</label>
-                <input value={staffForm.name} onChange={e => setStaffForm(p => ({ ...p, name: e.target.value }))} className="w-full px-4 py-3 rounded-xl border bg-card text-sm mt-1" />
+                <input value={staffForm.name} onChange={e => setStaffForm(p => ({ ...p, name: e.target.value }))} className="w-full px-4 py-3 rounded-md border bg-card text-sm mt-1" />
               </div>
               <div>
                 <label className="text-xs font-bold text-muted-foreground uppercase">Rol</label>
-                <select value={staffForm.role} onChange={e => setStaffForm(p => ({ ...p, role: e.target.value }))} className="w-full px-4 py-3 rounded-xl border bg-card text-sm mt-1">
+                <select value={staffForm.role} onChange={e => setStaffForm(p => ({ ...p, role: e.target.value }))} className="w-full px-4 py-3 rounded-md border bg-card text-sm mt-1">
                   <option value="garson">Garson</option>
                   <option value="mutfak">Mutfak</option>
                   <option value="cashier">Kasa</option>
@@ -568,12 +568,12 @@ export default function RestoranAdmin() {
               </div>
               <div>
                 <label className="text-xs font-bold text-muted-foreground uppercase">PIN Kodu *</label>
-                <input type="text" maxLength={6} value={staffForm.pin} onChange={e => setStaffForm(p => ({ ...p, pin: e.target.value.replace(/\D/g, '') }))} placeholder="4-6 haneli" className="w-full px-4 py-3 rounded-xl border bg-card text-sm mt-1 font-mono tracking-widest" />
+                <input type="text" maxLength={6} value={staffForm.pin} onChange={e => setStaffForm(p => ({ ...p, pin: e.target.value.replace(/\D/g, '') }))} placeholder="4-6 haneli" className="w-full px-4 py-3 rounded-md border bg-card text-sm mt-1 font-mono tracking-widest" />
               </div>
             </div>
             <div className="p-4 border-t flex gap-2">
-              <button onClick={() => setShowStaffDialog(false)} className="flex-1 py-3 rounded-xl bg-muted font-semibold text-sm pos-btn">Iptal</button>
-              <button onClick={handleAddStaff} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm pos-btn shadow-lg">Ekle</button>
+              <button onClick={() => setShowStaffDialog(false)} className="flex-1 py-3 rounded-md bg-muted font-semibold text-sm pos-btn">Iptal</button>
+              <button onClick={handleAddStaff} className="flex-1 py-3 rounded-md bg-primary text-primary-foreground font-bold text-sm pos-btn">Ekle</button>
             </div>
           </div>
         </div>

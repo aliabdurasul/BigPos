@@ -17,13 +17,13 @@ const ProductButton = memo(function ProductButton({ item, onTap }: { item: MenuI
   return (
     <button
       onClick={onTap}
-      className="flex flex-col items-start p-4 sm:p-5 bg-card rounded-2xl border-2 hover:border-primary/40 hover:shadow-md pos-btn min-h-[100px] touch-manipulation active:scale-[0.97] transition-transform"
+      className="flex flex-col items-start p-4 sm:p-5 bg-card rounded-lg border hover:bg-muted/50 pos-btn min-h-[100px] touch-manipulation active:scale-[0.97] transition-all"
     >
-      <span className="font-bold text-sm leading-tight">{item.name}</span>
+      <span className="font-semibold text-sm leading-tight">{item.name}</span>
       {item.description && (
         <span className="text-[11px] text-muted-foreground leading-tight mt-0.5 line-clamp-1">{item.description}</span>
       )}
-      <span className="text-primary font-black text-lg mt-auto pt-1">{item.price} ₺</span>
+      <span className="text-primary font-bold text-lg mt-auto pt-1">{item.price} ₺</span>
     </button>
   );
 });
@@ -44,13 +44,13 @@ export default function ProductGrid({
       <div className="flex gap-2 mb-3 items-center">
         <button
           onClick={onBackToTables}
-          className="px-4 py-3 rounded-xl bg-muted text-sm font-semibold pos-btn"
+          className="px-4 py-3 rounded-md bg-muted text-sm font-semibold pos-btn"
         >
           ← Masalar
         </button>
         <button
           onClick={onToggleSearch}
-          className={`p-2.5 rounded-xl border pos-btn ${showSearch ? 'bg-primary text-primary-foreground' : 'bg-card'}`}
+          className={`p-2.5 rounded-md border pos-btn ${showSearch ? 'bg-primary text-primary-foreground' : 'bg-card'}`}
         >
           <Search className="w-4 h-4" />
         </button>
@@ -60,7 +60,7 @@ export default function ProductGrid({
             value={searchQuery}
             onChange={e => onSearchChange(e.target.value)}
             placeholder="Ürün ara..."
-            className="flex-1 px-4 py-2.5 rounded-xl border bg-card text-sm"
+            className="flex-1 px-4 py-2.5 rounded-md border bg-card text-sm"
           />
         )}
       </div>
