@@ -1,4 +1,4 @@
-import { memo, useMemo, Fragment } from 'react';
+import { memo, useMemo, Fragment, useRef, useEffect } from 'react';
 import { MenuItem, ModifierGroup, OrderItemModifier } from '@/types/pos';
 import { Search } from 'lucide-react';
 import InlineModifiers from '@/components/waiter/ModifierModal';
@@ -24,16 +24,24 @@ const ProductButton = memo(function ProductButton({ item, onTap }: { item: MenuI
   return (
     <button
       onClick={onTap}
-      className="flex flex-col items-start p-3 bg-card rounded-md border hover:bg-muted/50 pos-btn min-h-[64px] touch-manipulation active:scale-[0.97] transition-all"
+      className="flex flex-col items-start p-4 bg-card rounded-lg border hover:bg-muted/50 pos-btn min-h-[80px] touch-manipulation active:scale-[0.97] transition-all"
     >
-      <span className="font-semibold text-sm leading-tight">{item.name}</span>
+      <span className="font-semibold text-base leading-tight">{item.name}</span>
       {item.description && (
-        <span className="text-[10px] text-muted-foreground leading-tight mt-0.5 line-clamp-1">{item.description}</span>
+        <span className="text-xs text-muted-foreground leading-tight mt-1 line-clamp-1">{item.description}</span>
       )}
-      <span className="text-primary font-bold text-sm mt-auto pt-0.5">{item.price} ₺</span>
+      <span className="text-primary font-bold text-base mt-auto pt-1">{item.price} ₺</span>
     </button>
   );
 });
+
+function ScrollIntoViewWrapper({ children }: { children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, []);
+  return <div ref={ref} className="col-span-full">{children}</div>;
+}
 
 export default function ProductGrid({
   menuItems, selectedCategory, showSearch, searchQuery,
@@ -76,12 +84,12 @@ export default function ProductGrid({
         )}
       </div>
       <div className="flex-1 overflow-y-auto scrollbar-thin">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1.5">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
           {filteredItems.map(item => (
             <Fragment key={item.id}>
               <ProductButton item={item} onTap={() => onItemTap(item)} />
               {expandedItemId === item.id && modifierGroups && productModifierMap && onConfirmModifiers && onCancelModifiers && (
-                <div className="col-span-full">
+                <ScrollIntoViewWrapper>
                   <InlineModifiers
                     item={item}
                     modifierGroups={modifierGroups}
@@ -89,7 +97,7 @@ export default function ProductGrid({
                     onConfirm={(mods, note, qty) => onConfirmModifiers(item, mods, note, qty)}
                     onCancel={onCancelModifiers}
                   />
-                </div>
+                </ScrollIntoViewWrapper>
               )}
             </Fragment>
           ))}

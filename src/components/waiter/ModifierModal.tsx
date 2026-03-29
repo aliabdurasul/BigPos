@@ -64,34 +64,34 @@ export default function InlineModifiers({ item, modifierGroups, productModifierM
     useModifierState(item, modifierGroups, productModifierMap);
 
   return (
-    <div className="bg-card border rounded-md p-3 space-y-2.5 animate-fade-in">
+    <div className="bg-card border rounded-lg p-4 space-y-3 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <span className="font-bold text-sm">{item.name}</span>
-          <span className="text-primary font-semibold text-sm ml-2">{item.price} ₺</span>
+          <span className="font-bold text-base">{item.name}</span>
+          <span className="text-primary font-semibold text-base ml-2">{item.price} ₺</span>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="w-7 h-7 rounded bg-muted flex items-center justify-center pos-btn">
-            <Minus className="w-3 h-3" />
+          <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="w-9 h-9 rounded-md bg-muted flex items-center justify-center pos-btn">
+            <Minus className="w-4 h-4" />
           </button>
-          <span className="text-sm font-bold w-5 text-center tabular-nums">{quantity}</span>
-          <button onClick={() => setQuantity(q => q + 1)} className="w-7 h-7 rounded bg-primary text-primary-foreground flex items-center justify-center pos-btn">
-            <Plus className="w-3 h-3" />
+          <span className="text-base font-bold w-6 text-center tabular-nums">{quantity}</span>
+          <button onClick={() => setQuantity(q => q + 1)} className="w-9 h-9 rounded-md bg-primary text-primary-foreground flex items-center justify-center pos-btn">
+            <Plus className="w-4 h-4" />
           </button>
         </div>
       </div>
 
       {visibleGroups.map(group => (
         <div key={group.id}>
-          <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">{group.name}</h4>
-          <div className="flex flex-wrap gap-1">
+          <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">{group.name}</h4>
+          <div className="flex flex-wrap gap-1.5">
             {group.options.map(opt => {
               const isSelected = (selectedModifiers[group.id] || []).includes(opt.id);
               return (
                 <button
                   key={opt.id}
                   onClick={() => toggleModifier(group.id, opt.id, group.type)}
-                  className={`px-2 py-1 rounded text-xs font-medium border pos-btn ${
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium border pos-btn ${
                     isSelected ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-muted/30 hover:bg-muted'
                   }`}
                 >
@@ -107,14 +107,14 @@ export default function InlineModifiers({ item, modifierGroups, productModifierM
         value={itemNote}
         onChange={e => setItemNote(e.target.value)}
         placeholder="Not ekle..."
-        className="w-full px-2.5 py-1.5 rounded border bg-muted/30 text-xs"
+        className="w-full px-3 py-2 rounded-md border bg-muted/30 text-sm"
       />
 
       <div className="flex gap-2">
-        <button onClick={onCancel} className="px-3 py-1.5 rounded bg-muted text-xs font-semibold pos-btn">İptal</button>
+        <button onClick={onCancel} className="px-4 py-2 rounded-md bg-muted text-sm font-semibold pos-btn">İptal</button>
         <button
           onClick={() => onConfirm(buildModifiers(), itemNote, quantity)}
-          className="flex-1 py-1.5 rounded bg-primary text-primary-foreground text-xs font-bold pos-btn flex items-center justify-center gap-1"
+          className="flex-1 py-2 rounded-md bg-primary text-primary-foreground text-sm font-bold pos-btn flex items-center justify-center gap-1.5"
         >
           <span>Ekle</span>
           <span className="opacity-80">·</span>

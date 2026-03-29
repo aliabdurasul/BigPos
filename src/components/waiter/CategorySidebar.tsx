@@ -11,19 +11,19 @@ interface CategorySidebarProps {
 export default function CategorySidebar({ categories, selectedCategory, showSearch, onSelectCategory, horizontal }: CategorySidebarProps) {
   if (horizontal) {
     return (
-      <div className="shrink-0 border-b bg-card px-2 py-2 overflow-x-auto scrollbar-thin">
-        <div className="flex gap-1.5 min-w-max">
+      <div className="shrink-0 border-b bg-card px-3 py-2.5 overflow-x-auto scrollbar-thin">
+        <div className="flex gap-2 min-w-max">
           {categories.map(c => (
             <button
               key={c.id}
               onClick={() => onSelectCategory(c.id)}
-              className={`flex items-center gap-1.5 px-2.5 py-2 rounded-md text-xs font-semibold whitespace-nowrap pos-btn ${
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-md text-sm font-semibold whitespace-nowrap pos-btn ${
                 selectedCategory === c.id && !showSearch
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-muted/50 hover:bg-muted'
               }`}
             >
-              <span className="text-sm">{c.icon}</span>
+              <span className="text-base">{c.icon}</span>
               {c.name}
             </button>
           ))}
