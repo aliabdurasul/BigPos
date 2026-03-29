@@ -444,15 +444,21 @@ export default function GarsonPOS() {
     );
   }
 
-  // ─── Desktop 3-Column Layout ─────────────────
+  // ─── Desktop Two-State Layout ─────────────────
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background">
       {/* Header */}
       <header className="flex items-center gap-2 px-3 py-2 bg-card border-b shrink-0">
-        <button onClick={() => { logout(); navigate(`/pos/${session?.type === 'staff' ? session.slug : ''}`); }} className="p-2 rounded-md hover:bg-muted pos-btn">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
+        {selectedTable ? (
+          <button onClick={leaveTable} className="flex items-center gap-1.5 p-2 rounded-md hover:bg-muted pos-btn text-sm font-semibold">
+            <ArrowLeft className="w-5 h-5" /> Masalar
+          </button>
+        ) : (
+          <button onClick={() => { logout(); navigate(`/pos/${session?.type === 'staff' ? session.slug : ''}`); }} className="p-2 rounded-md hover:bg-muted pos-btn">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+        )}
         <h1 className="text-lg font-bold">Garson POS</h1>
         {staffName && <span className="text-xs text-muted-foreground font-medium ml-1">({staffName})</span>}
         {selectedTable && (
@@ -470,9 +476,9 @@ export default function GarsonPOS() {
         </button>
       </header>
 
-      <div className="flex flex-1 min-h-0">
-        {/* LEFT: Table Grid — always visible, 30% */}
-        <div className="w-[30%] shrink-0 border-r flex flex-col min-h-0 overflow-hidden">
+      {/* State 1: No table selected — full-screen table grid */}
+      {!selectedTable && (
+        <div className="flex-1 min-h-0 overflow-hidden">
           <TableGrid
             tables={tables}
             orders={orders}
@@ -480,61 +486,65 @@ export default function GarsonPOS() {
             selectedFloor={selectedFloor}
             onSelectFloor={setSelectedFloor}
             onSelectTable={handleSelectTable}
-            compact
-            selectedTableId={selectedTable?.id}
+            fullscreen
           />
         </div>
+      )}
 
-        {/* CENTER: Categories + Products — 40% */}
-        <div className="w-[40%] flex flex-col min-h-0 overflow-hidden">
-          <CategorySidebar
-            categories={categories}
-            selectedCategory={selectedCategory}
-            showSearch={showSearch}
-            onSelectCategory={handleSelectCategory}
-            horizontal
-          />
-          <ProductGrid
-            menuItems={menuItems}
-            selectedCategory={selectedCategory}
-            showSearch={showSearch}
-            searchQuery={searchQuery}
-            onToggleSearch={() => { setShowSearch(!showSearch); setSearchQuery(''); }}
-            onSearchChange={setSearchQuery}
-            onItemTap={handleItemTap}
-            hideBackButton
-            expandedItemId={expandedItemId}
-            modifierGroups={modifierGroups}
-            productModifierMap={productModifierMap}
-            onConfirmModifiers={handleConfirmModifiers}
-            onCancelModifiers={() => setExpandedItemId(null)}
-          />
-        </div>
+      {/* State 2: Table selected — service layout (70% menu | 30% order) */}
+      {selectedTable && (
+        <div className="flex flex-1 min-h-0">
+          {/* LEFT: Categories + Products — 70% */}
+          <div className="w-[70%] flex flex-col min-h-0 overflow-hidden">
+            <CategorySidebar
+              categories={categories}
+              selectedCategory={selectedCategory}
+              showSearch={showSearch}
+              onSelectCategory={handleSelectCategory}
+              horizontal
+            />
+            <ProductGrid
+              menuItems={menuItems}
+              selectedCategory={selectedCategory}
+              showSearch={showSearch}
+              searchQuery={searchQuery}
+              onToggleSearch={() => { setShowSearch(!showSearch); setSearchQuery(''); }}
+              onSearchChange={setSearchQuery}
+              onItemTap={handleItemTap}
+              hideBackButton
+              expandedItemId={expandedItemId}
+              modifierGroups={modifierGroups}
+              productModifierMap={productModifierMap}
+              onConfirmModifiers={handleConfirmModifiers}
+              onCancelModifiers={() => setExpandedItemId(null)}
+            />
+          </div>
 
-        {/* RIGHT: Order Panel — always visible, 30% */}
-        <div className="w-[30%] shrink-0 border-l flex flex-col min-h-0 overflow-hidden">
-          <OrderPanel
-            selectedTable={selectedTable}
-            orderItems={orderItems}
-            total={total}
-            totalPaid={totalPaid}
-            totalPrepayment={totalPrepayment}
-            remainingAmount={remainingAmount}
-            editNoteId={editNoteId}
-            editNoteText={editNoteText}
-            onUpdateQty={handleUpdateQty}
-            onRemoveItem={handleRemoveItem}
-            onEditNote={handleEditNote}
-            onSaveNote={handleSaveNote}
-            onEditNoteTextChange={setEditNoteText}
-            onSendToKitchen={sendToKitchen}
-            onClearOrder={clearOrder}
-            onPrintAdisyon={printAdisyon}
-            onMarkReady={handleMarkReady}
-            hasActiveOrders={hasActiveOrders}
-          />
+          {/* RIGHT: Order Panel — 30% */}
+          <div className="w-[30%] shrink-0 border-l flex flex-col min-h-0 overflow-hidden">
+            <OrderPanel
+              selectedTable={selectedTable}
+              orderItems={orderItems}
+              total={total}
+              totalPaid={totalPaid}
+              totalPrepayment={totalPrepayment}
+              remainingAmount={remainingAmount}
+              editNoteId={editNoteId}
+              editNoteText={editNoteText}
+              onUpdateQty={handleUpdateQty}
+              onRemoveItem={handleRemoveItem}
+              onEditNote={handleEditNote}
+              onSaveNote={handleSaveNote}
+              onEditNoteTextChange={setEditNoteText}
+              onSendToKitchen={sendToKitchen}
+              onClearOrder={clearOrder}
+              onPrintAdisyon={printAdisyon}
+              onMarkReady={handleMarkReady}
+              hasActiveOrders={hasActiveOrders}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {showSentWarning && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 animate-fade-in" onClick={() => setShowSentWarning(null)}>
