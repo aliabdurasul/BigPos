@@ -13,7 +13,6 @@ import TableGrid from '@/components/waiter/TableGrid';
 import OrderPanel from '@/components/waiter/OrderPanel';
 import ProductGrid from '@/components/waiter/ProductGrid';
 import CategorySidebar from '@/components/waiter/CategorySidebar';
-import ModifierModal from '@/components/waiter/ModifierModal';
 
 function formatDuration(openedAt?: Date) {
   if (!openedAt) return '';
@@ -42,8 +41,7 @@ export default function GarsonPOS() {
   const [selectedFloor, setSelectedFloor] = useState(floors[0]);
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const draftItemsRef = useRef<Map<string, OrderItem[]>>(new Map());
-  const [showModifierModal, setShowModifierModal] = useState(false);
-  const [pendingItem, setPendingItem] = useState<MenuItem | null>(null);
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [editNoteId, setEditNoteId] = useState<string | null>(null);
@@ -92,6 +90,7 @@ export default function GarsonPOS() {
     }
     setSelectedTable(null);
     setOrderItems([]);
+    setExpandedItemId(null);
     if (isMobile) setMobileTab('tables');
   }, [selectedTable, orderItems, saveDrafts, isMobile]);
 
@@ -134,9 +133,14 @@ export default function GarsonPOS() {
       toast.warning('Önce bir masa seçin');
       return;
     }
-    setPendingItem(item);
-    setShowModifierModal(true);
-  }, [selectedTable]);
+    const linked = productModifierMap.get(item.id) || [];
+    if (linked.length > 0) {
+      setExpandedItemId(prev => prev === item.id ? null : item.id);
+    } else {
+      addItemDirect(item, [], '');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTable, productModifierMap]);
 
   const addItemDirect = (item: MenuItem, modifiers: OrderItemModifier[], note: string) => {
     setOrderItems(prev => {
@@ -148,13 +152,11 @@ export default function GarsonPOS() {
     });
   };
 
-  const handleConfirmModifiers = (modifiers: OrderItemModifier[], note: string, quantity: number) => {
-    if (!pendingItem) return;
+  const handleConfirmModifiers = (item: MenuItem, modifiers: OrderItemModifier[], note: string, quantity: number) => {
     for (let i = 0; i < quantity; i++) {
-      addItemDirect(pendingItem, modifiers, note);
+      addItemDirect(item, modifiers, note);
     }
-    setShowModifierModal(false);
-    setPendingItem(null);
+    setExpandedItemId(null);
   };
 
   const handleRemoveItem = (itemId: string) => {
@@ -290,6 +292,7 @@ export default function GarsonPOS() {
     setSelectedCategory(catId);
     setShowSearch(false);
     setSearchQuery('');
+    setExpandedItemId(null);
   };
 
   // ─── Mobile Layout ──────────────────────────────
@@ -346,6 +349,11 @@ export default function GarsonPOS() {
                 onSearchChange={setSearchQuery}
                 onItemTap={handleItemTap}
                 onBackToTables={leaveTable}
+                expandedItemId={expandedItemId}
+                modifierGroups={modifierGroups}
+                productModifierMap={productModifierMap}
+                onConfirmModifiers={handleConfirmModifiers}
+                onCancelModifiers={() => setExpandedItemId(null)}
               />
             </div>
           )}
@@ -425,17 +433,6 @@ export default function GarsonPOS() {
             )}
           </button>
         </nav>
-
-        {/* Modifier Modal */}
-        {showModifierModal && pendingItem && (
-          <ModifierModal
-            item={pendingItem}
-            modifierGroups={modifierGroups}
-            productModifierMap={productModifierMap}
-            onConfirm={handleConfirmModifiers}
-            onCancel={() => { setShowModifierModal(false); setPendingItem(null); }}
-          />
-        )}
 
         {/* Sent Item Warning */}
         {showSentWarning && (
@@ -528,6 +525,11 @@ export default function GarsonPOS() {
             onSearchChange={setSearchQuery}
             onItemTap={handleItemTap}
             onBackToTables={leaveTable}
+            expandedItemId={expandedItemId}
+            modifierGroups={modifierGroups}
+            productModifierMap={productModifierMap}
+            onConfirmModifiers={handleConfirmModifiers}
+            onCancelModifiers={() => setExpandedItemId(null)}
           />
         )}
 
@@ -540,16 +542,6 @@ export default function GarsonPOS() {
           />
         )}
       </div>
-
-      {showModifierModal && pendingItem && (
-        <ModifierModal
-          item={pendingItem}
-          modifierGroups={modifierGroups}
-          productModifierMap={productModifierMap}
-          onConfirm={handleConfirmModifiers}
-          onCancel={() => { setShowModifierModal(false); setPendingItem(null); }}
-        />
-      )}
 
       {showSentWarning && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 animate-fade-in" onClick={() => setShowSentWarning(null)}>

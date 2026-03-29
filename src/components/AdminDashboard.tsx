@@ -180,14 +180,14 @@ export default function AdminDashboard() {
             {hourlyData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={hourlyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 10%, 20%)" />
-                  <XAxis dataKey="saat" tick={{ fontSize: 10 }} stroke="hsl(220, 10%, 55%)" />
-                  <YAxis tick={{ fontSize: 10 }} stroke="hsl(220, 10%, 55%)" tickFormatter={(v) => `${v}TL`} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 10%, 88%)" />
+                  <XAxis dataKey="saat" tick={{ fontSize: 10 }} stroke="hsl(220, 10%, 40%)" />
+                  <YAxis tick={{ fontSize: 10 }} stroke="hsl(220, 10%, 40%)" tickFormatter={(v) => `${v}TL`} />
                   <Tooltip
                     formatter={(value: number) => [`${value.toLocaleString('tr-TR')} TL`, 'Ciro']}
-                    contentStyle={{ borderRadius: 8, border: '1px solid hsl(220, 10%, 20%)', fontSize: 12, background: 'hsl(220, 14%, 13%)', color: 'hsl(220, 10%, 92%)' }}
+                    contentStyle={{ borderRadius: 8, border: '1px solid hsl(220, 10%, 88%)', fontSize: 12, background: 'hsl(0, 0%, 100%)', color: 'hsl(220, 14%, 10%)' }}
                   />
-                  <Bar dataKey="ciro" fill="hsl(217, 91%, 60%)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="ciro" fill="hsl(217, 91%, 50%)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -310,7 +310,7 @@ export default function AdminDashboard() {
 
             {/* Termal yazici fis formati - text preview */}
             <div className="p-5 max-h-[70vh] overflow-y-auto">
-              <pre style={{ fontFamily: "'Courier New', monospace", fontSize: 11, lineHeight: 1.5, color: 'hsl(220, 10%, 80%)', whiteSpace: 'pre-wrap' }}>{formatGunSonu(buildGunSonuData())}</pre>
+              <pre style={{ fontFamily: "'Courier New', monospace", fontSize: 11, lineHeight: 1.5, color: 'hsl(220, 14%, 10%)', whiteSpace: 'pre-wrap', background: 'hsl(220, 10%, 96%)', padding: 12, borderRadius: 8, border: '1px solid hsl(220, 10%, 88%)' }}>{formatGunSonu(buildGunSonuData())}</pre>
             </div>
 
             <div className="px-5 pb-5 flex gap-2">

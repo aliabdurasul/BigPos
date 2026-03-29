@@ -9,7 +9,7 @@ interface PaymentScreenProps {
   restaurantName: string;
   staffName: string;
   onCompletePayment: (amount: number, method: string, discountAmount?: number, discountReason?: string) => void;
-  onPrepayment: (amount: number) => void;
+  onPrepayment: (amount: number, method: string) => void;
   onPayOrderItems?: (itemIds: string[], amount: number, method: string, discountAmount?: number, discountReason?: string) => void;
   onClose: () => void;
 }
@@ -27,6 +27,7 @@ export default function PaymentScreen({
   const [discountReason, setDiscountReason] = useState('');
   const [confirmPayment, setConfirmPayment] = useState<{ method: string; amount: number; discount: number } | null>(null);
   const [prepaymentInput, setPrepaymentInput] = useState('');
+  const [prepaymentMethod, setPrepaymentMethod] = useState<'nakit' | 'kredi_karti'>('nakit');
 
   const allPayments = order.payments || [];
   const totalPaid = allPayments.reduce((sum, p) => sum + p.amount, 0);
@@ -117,7 +118,7 @@ export default function PaymentScreen({
           </div>
 
           <div className="flex-1 overflow-y-auto p-4">
-            <pre style={{ fontFamily: "'Courier New', monospace", fontSize: 11, lineHeight: 1.5, color: 'hsl(220, 10%, 80%)', whiteSpace: 'pre-wrap', background: 'hsl(220, 14%, 10%)', padding: 12, borderRadius: 8, border: '1px solid hsl(220, 10%, 20%)' }}>{formatAdisyon({
+            <pre style={{ fontFamily: "'Courier New', monospace", fontSize: 11, lineHeight: 1.5, color: 'hsl(220, 14%, 10%)', whiteSpace: 'pre-wrap', background: 'hsl(220, 10%, 96%)', padding: 12, borderRadius: 8, border: '1px solid hsl(220, 10%, 88%)' }}>{formatAdisyon({
               restaurantName: restaurantName || 'RESTORAN',
               tableName,
               staffName: staffName || '',
@@ -234,6 +235,20 @@ export default function PaymentScreen({
                   Mevcut on odeme: {prepaymentTotal} TL
                 </div>
               )}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPrepaymentMethod('nakit')}
+                  className={`flex-1 py-2 rounded-md text-xs font-bold pos-btn flex items-center justify-center gap-1 ${prepaymentMethod === 'nakit' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
+                >
+                  <Banknote className="w-3.5 h-3.5" /> Nakit
+                </button>
+                <button
+                  onClick={() => setPrepaymentMethod('kredi_karti')}
+                  className={`flex-1 py-2 rounded-md text-xs font-bold pos-btn flex items-center justify-center gap-1 ${prepaymentMethod === 'kredi_karti' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
+                >
+                  <CreditCard className="w-3.5 h-3.5" /> Kredi Kartı
+                </button>
+              </div>
               <input
                 value={prepaymentInput}
                 onChange={e => setPrepaymentInput(e.target.value)}
@@ -245,7 +260,7 @@ export default function PaymentScreen({
               <button
                 onClick={() => {
                   const amt = Number(prepaymentInput);
-                  if (amt > 0) { onPrepayment(amt); setPrepaymentInput(''); }
+                  if (amt > 0) { onPrepayment(amt, prepaymentMethod); setPrepaymentInput(''); }
                 }}
                 disabled={!prepaymentInput || Number(prepaymentInput) <= 0}
                 className="w-full py-3 rounded-md bg-primary text-primary-foreground font-bold text-sm pos-btn disabled:opacity-40"

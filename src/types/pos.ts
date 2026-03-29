@@ -219,13 +219,13 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 };
 
 export const TABLE_STATUS_COLORS: Record<TableStatus, string> = {
-  available: 'bg-pos-success',
-  occupied: 'bg-primary',
-  waiting_payment: 'bg-pos-warning',
+  available: 'bg-gray-100 text-gray-400',
+  occupied: 'bg-red-50 text-red-700',
+  waiting_payment: 'bg-amber-50 text-amber-700',
 };
 
 export const TABLE_STATUS_BORDER_COLORS: Record<TableStatus, string> = {
-  available: 'border-pos-success/20',
-  occupied: 'border-primary/20',
-  waiting_payment: 'border-pos-warning/20',
+  available: 'border-gray-200',
+  occupied: 'border-red-200',
+  waiting_payment: 'border-amber-200',
 };

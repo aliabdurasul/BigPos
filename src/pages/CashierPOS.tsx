@@ -80,10 +80,10 @@ export default function CashierPOS() {
     setSelectedOrder(null);
   };
 
-  const handlePrepayment = async (amount: number) => {
+  const handlePrepayment = async (amount: number, method: string) => {
     if (!selectedOrder) return;
     try {
-      await recordPrepayment(selectedOrder.id, amount);
+      await recordPrepayment(selectedOrder.id, amount, method);
       toast.success(`${amount} ₺ ön ödeme alındı`);
     } catch {
       toast.error('Ön ödeme kaydedilemedi');
@@ -152,7 +152,7 @@ export default function CashierPOS() {
         </div>
 
         {/* Table Grid */}
-        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 flex-1 content-start overflow-y-auto">
+        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 flex-1 content-start overflow-y-auto">
           {floorTables.map(t => {
             const order = getTableOrder(t.id);
             const isWaiting = t.status === 'waiting_payment';
@@ -167,33 +167,32 @@ export default function CashierPOS() {
               <button
                 key={t.id}
                 onClick={() => handleTableTap(t)}
-                className={`relative flex flex-col items-center justify-center p-4 rounded-lg border ${TABLE_STATUS_BORDER_COLORS[t.status]} bg-card pos-btn transition-all ${
-                  isWaiting ? 'hover:bg-muted/50 border-pos-warning/40' : hasOrder ? 'hover:bg-muted/50' : 'opacity-60'
+                className={`flex flex-col items-center justify-center p-3 rounded-md border min-h-[72px] ${TABLE_STATUS_COLORS[t.status]} ${TABLE_STATUS_BORDER_COLORS[t.status]} pos-btn transition-all ${
+                  isWaiting ? '' : hasOrder ? '' : 'opacity-60'
                 }`}
               >
-                <span className={`absolute top-2 right-2 w-3 h-3 rounded-full ${TABLE_STATUS_COLORS[t.status]}`} />
-                <span className="text-2xl font-bold text-foreground">{t.name.replace('Masa ', '')}</span>
-                <span className="text-xs text-muted-foreground mt-0.5">{t.name}</span>
+                <span className="text-lg font-bold">{t.name.replace('Masa ', '')}</span>
+                <span className="text-[10px] opacity-60">{t.name}</span>
 
                 {order && (
                   <>
                     {hasAnyPayment ? (
                       <>
-                        <span className="text-[10px] text-muted-foreground line-through mt-1">{order.total} TL</span>
-                        <span className="text-sm font-bold text-pos-warning">{remaining} TL kalan</span>
+                        <span className="text-[9px] opacity-60 line-through mt-0.5">{order.total} TL</span>
+                        <span className="text-[11px] font-bold">{remaining} TL kalan</span>
                       </>
                     ) : (
-                      <span className="text-sm font-bold text-primary mt-1">{order.total} TL</span>
+                      <span className="text-[11px] font-bold mt-0.5">{order.total} TL</span>
                     )}
                   </>
                 )}
 
-                <span className={`text-[10px] font-bold mt-1 ${isWaiting ? 'text-pos-warning' : 'text-muted-foreground'}`}>
+                <span className={`text-[9px] font-bold mt-0.5`}>
                   {TABLE_STATUS_LABELS[t.status]}
                 </span>
 
                 {t.openedAt && t.status !== 'available' && (
-                  <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground mt-0.5">
+                  <span className="flex items-center gap-0.5 text-[9px] opacity-60 mt-0.5">
                     <Clock className="w-2.5 h-2.5" /> {formatDuration(t.openedAt)}
                   </span>
                 )}
@@ -201,7 +200,7 @@ export default function CashierPOS() {
                 {hasOrder && t.status === 'occupied' && (
                   <button
                     onClick={(e) => { e.stopPropagation(); handleMarkReady(t.id); }}
-                    className="mt-1.5 px-2.5 py-1 rounded-md bg-pos-success text-pos-success-foreground text-[10px] font-bold pos-btn"
+                    className="mt-1 px-2 py-0.5 rounded-md bg-pos-success text-pos-success-foreground text-[9px] font-bold pos-btn"
                   >
                     ✅ Hazır
                   </button>
@@ -213,9 +212,9 @@ export default function CashierPOS() {
 
         {/* Legend */}
         <div className="flex gap-4 mt-3 justify-center text-xs text-muted-foreground">
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-pos-success" /> Boş</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-primary" /> Dolu</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-pos-warning" /> Ödeme Bekliyor</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-gray-200 border border-gray-300" /> Boş</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-100 border border-red-300" /> Dolu</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-amber-100 border border-amber-300" /> Ödeme Bekliyor</span>
         </div>
       </div>
 
