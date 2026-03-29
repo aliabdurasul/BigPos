@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { usePOS } from '@/context/POSContext';
 import { useAuth } from '@/context/AuthContext';
 import { OrderItem, Table, MenuItem, OrderItemModifier } from '@/types/pos';
-import { ArrowLeft, Clock, LogOut, AlertTriangle, LayoutGrid, UtensilsCrossed, ClipboardList } from 'lucide-react';
+import { ArrowLeft, Clock, LogOut, AlertTriangle, ShoppingCart } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { formatAdisyon, printReceipt } from '@/lib/receipt';
@@ -13,6 +13,7 @@ import TableGrid from '@/components/waiter/TableGrid';
 import OrderPanel from '@/components/waiter/OrderPanel';
 import ProductGrid from '@/components/waiter/ProductGrid';
 import CategorySidebar from '@/components/waiter/CategorySidebar';
+import { BottomSheetModifiers } from '@/components/waiter/ModifierModal';
 
 function formatDuration(openedAt?: Date) {
   if (!openedAt) return '';
@@ -42,6 +43,7 @@ export default function GarsonPOS() {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const draftItemsRef = useRef<Map<string, OrderItem[]>>(new Map());
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  const [mobileModifierItem, setMobileModifierItem] = useState<MenuItem | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [editNoteId, setEditNoteId] = useState<string | null>(null);
@@ -135,12 +137,16 @@ export default function GarsonPOS() {
     }
     const linked = productModifierMap.get(item.id) || [];
     if (linked.length > 0) {
-      setExpandedItemId(prev => prev === item.id ? null : item.id);
+      if (isMobile) {
+        setMobileModifierItem(item);
+      } else {
+        setExpandedItemId(prev => prev === item.id ? null : item.id);
+      }
     } else {
       addItemDirect(item, [], '');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTable, productModifierMap]);
+  }, [selectedTable, productModifierMap, isMobile]);
 
   const addItemDirect = (item: MenuItem, modifiers: OrderItemModifier[], note: string) => {
     setOrderItems(prev => {
@@ -157,6 +163,7 @@ export default function GarsonPOS() {
       addItemDirect(item, modifiers, note);
     }
     setExpandedItemId(null);
+    setMobileModifierItem(null);
   };
 
   const handleRemoveItem = (itemId: string) => {
@@ -302,10 +309,21 @@ export default function GarsonPOS() {
       <div className="h-screen flex flex-col overflow-hidden bg-background">
         {/* Mobile Header */}
         <header className="flex items-center gap-2 px-3 py-2 bg-card border-b shrink-0">
-          <button onClick={() => { logout(); navigate(`/pos/${session?.type === 'staff' ? session.slug : ''}`); }} className="p-2 rounded-md hover:bg-muted pos-btn">
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-base font-bold truncate">Garson POS</h1>
+          {mobileTab === 'tables' ? (
+            <button onClick={() => { logout(); navigate(`/pos/${session?.type === 'staff' ? session.slug : ''}`); }} className="p-2 rounded-md hover:bg-muted pos-btn">
+              <LogOut className="w-5 h-5" />
+            </button>
+          ) : (
+            <button onClick={() => {
+              if (mobileTab === 'order') { setMobileTab('menu'); }
+              else { leaveTable(); }
+            }} className="p-2 rounded-md hover:bg-muted pos-btn">
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+          )}
+          <h1 className="text-base font-bold truncate">
+            {mobileTab === 'tables' ? 'Masalar' : mobileTab === 'menu' ? 'Menü' : 'Sipariş'}
+          </h1>
           {staffName && <span className="text-xs text-muted-foreground font-medium">({staffName})</span>}
           {selectedTable && (
             <div className="ml-auto flex items-center gap-1.5">
@@ -319,8 +337,8 @@ export default function GarsonPOS() {
           )}
         </header>
 
-        {/* Mobile Content */}
-        <div className="flex-1 min-h-0">
+        {/* Mobile Content — one screen at a time */}
+        <div className="flex-1 min-h-0 flex flex-col">
           {mobileTab === 'tables' && (
             <TableGrid
               tables={tables}
@@ -331,8 +349,9 @@ export default function GarsonPOS() {
               onSelectTable={handleSelectTable}
             />
           )}
+
           {mobileTab === 'menu' && selectedTable && (
-            <div className="flex flex-col h-full">
+            <>
               <CategorySidebar
                 categories={categories}
                 selectedCategory={selectedCategory}
@@ -348,20 +367,11 @@ export default function GarsonPOS() {
                 onToggleSearch={() => { setShowSearch(!showSearch); setSearchQuery(''); }}
                 onSearchChange={setSearchQuery}
                 onItemTap={handleItemTap}
-                onBackToTables={leaveTable}
-                expandedItemId={expandedItemId}
-                modifierGroups={modifierGroups}
-                productModifierMap={productModifierMap}
-                onConfirmModifiers={handleConfirmModifiers}
-                onCancelModifiers={() => setExpandedItemId(null)}
+                hideBackButton
               />
-            </div>
+            </>
           )}
-          {mobileTab === 'menu' && !selectedTable && (
-            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-              Önce bir masa seçin
-            </div>
-          )}
+
           {mobileTab === 'order' && (
             <OrderPanel
               selectedTable={selectedTable}
@@ -387,52 +397,32 @@ export default function GarsonPOS() {
           )}
         </div>
 
-        {/* Floating Cart Bar */}
-        {mobileTab === 'menu' && newItemCount > 0 && (
+        {/* Sticky bottom order summary — only on menu step */}
+        {mobileTab === 'menu' && selectedTable && (
           <div
             onClick={() => setMobileTab('order')}
-            className="shrink-0 border-t bg-primary text-primary-foreground px-4 py-3 flex items-center justify-between cursor-pointer active:opacity-90"
+            className="shrink-0 border-t bg-primary text-primary-foreground px-4 py-3.5 flex items-center justify-between cursor-pointer active:opacity-90 touch-manipulation"
           >
-            <span className="font-bold">{newItemCount} ürün &middot; {total} TL</span>
-            <span className="text-sm font-semibold">Sepeti Gör &rarr;</span>
+            <div className="flex items-center gap-2">
+              <ShoppingCart className="w-5 h-5" />
+              <span className="font-bold">
+                {newItemCount > 0 ? `${newItemCount} ürün · ${total} ₺` : 'Sipariş'}
+              </span>
+            </div>
+            <span className="text-sm font-semibold">Sipariş →</span>
           </div>
         )}
 
-        {/* Mobile Bottom Tab Bar */}
-        <nav className="shrink-0 border-t bg-card flex">
-          <button
-            onClick={() => setMobileTab('tables')}
-            className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs font-semibold pos-btn ${
-              mobileTab === 'tables' ? 'text-primary' : 'text-muted-foreground'
-            }`}
-          >
-            <LayoutGrid className="w-5 h-5" />
-            Masalar
-          </button>
-          <button
-            onClick={() => setMobileTab('menu')}
-            className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs font-semibold pos-btn ${
-              mobileTab === 'menu' ? 'text-primary' : 'text-muted-foreground'
-            }`}
-          >
-            <UtensilsCrossed className="w-5 h-5" />
-            Menü
-          </button>
-          <button
-            onClick={() => setMobileTab('order')}
-            className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs font-semibold pos-btn relative ${
-              mobileTab === 'order' ? 'text-primary' : 'text-muted-foreground'
-            }`}
-          >
-            <ClipboardList className="w-5 h-5" />
-            Sipariş
-            {newItemCount > 0 && (
-              <span className="absolute top-1 right-1/4 w-5 h-5 rounded-full bg-pos-danger text-pos-danger-foreground text-[10px] font-bold flex items-center justify-center">
-                {newItemCount}
-              </span>
-            )}
-          </button>
-        </nav>
+        {/* Mobile Bottom Sheet Modifiers */}
+        {mobileModifierItem && (
+          <BottomSheetModifiers
+            item={mobileModifierItem}
+            modifierGroups={modifierGroups}
+            productModifierMap={productModifierMap}
+            onConfirm={(mods, note, qty) => handleConfirmModifiers(mobileModifierItem, mods, note, qty)}
+            onCancel={() => setMobileModifierItem(null)}
+          />
+        )}
 
         {/* Sent Item Warning */}
         {showSentWarning && (
@@ -454,7 +444,7 @@ export default function GarsonPOS() {
     );
   }
 
-  // ─── Desktop Layout ─────────────────────────────
+  // ─── Desktop 3-Column Layout ─────────────────
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background">
@@ -475,15 +465,54 @@ export default function GarsonPOS() {
             <span className="px-3 py-1 rounded-md bg-primary/10 text-primary font-bold text-sm">{selectedTable.name}</span>
           </div>
         )}
-        {!selectedTable && (
-          <button onClick={() => { logout(); navigate(`/pos/${session?.type === 'staff' ? session.slug : ''}`); }} className="ml-auto p-2 rounded-md hover:bg-muted pos-btn" title="Çıkış">
-            <LogOut className="w-4 h-4" />
-          </button>
-        )}
+        <button onClick={() => { logout(); navigate(`/pos/${session?.type === 'staff' ? session.slug : ''}`); }} className="ml-auto p-2 rounded-md hover:bg-muted pos-btn" title="Çıkış">
+          <LogOut className="w-4 h-4" />
+        </button>
       </header>
 
       <div className="flex flex-1 min-h-0">
-        {selectedTable && (
+        {/* LEFT: Table Grid — always visible, 30% */}
+        <div className="w-[30%] shrink-0 border-r flex flex-col min-h-0 overflow-hidden">
+          <TableGrid
+            tables={tables}
+            orders={orders}
+            floors={floors}
+            selectedFloor={selectedFloor}
+            onSelectFloor={setSelectedFloor}
+            onSelectTable={handleSelectTable}
+            compact
+            selectedTableId={selectedTable?.id}
+          />
+        </div>
+
+        {/* CENTER: Categories + Products — 40% */}
+        <div className="w-[40%] flex flex-col min-h-0 overflow-hidden">
+          <CategorySidebar
+            categories={categories}
+            selectedCategory={selectedCategory}
+            showSearch={showSearch}
+            onSelectCategory={handleSelectCategory}
+            horizontal
+          />
+          <ProductGrid
+            menuItems={menuItems}
+            selectedCategory={selectedCategory}
+            showSearch={showSearch}
+            searchQuery={searchQuery}
+            onToggleSearch={() => { setShowSearch(!showSearch); setSearchQuery(''); }}
+            onSearchChange={setSearchQuery}
+            onItemTap={handleItemTap}
+            hideBackButton
+            expandedItemId={expandedItemId}
+            modifierGroups={modifierGroups}
+            productModifierMap={productModifierMap}
+            onConfirmModifiers={handleConfirmModifiers}
+            onCancelModifiers={() => setExpandedItemId(null)}
+          />
+        </div>
+
+        {/* RIGHT: Order Panel — always visible, 30% */}
+        <div className="w-[30%] shrink-0 border-l flex flex-col min-h-0 overflow-hidden">
           <OrderPanel
             selectedTable={selectedTable}
             orderItems={orderItems}
@@ -504,43 +533,7 @@ export default function GarsonPOS() {
             onMarkReady={handleMarkReady}
             hasActiveOrders={hasActiveOrders}
           />
-        )}
-
-        {!selectedTable ? (
-          <TableGrid
-            tables={tables}
-            orders={orders}
-            floors={floors}
-            selectedFloor={selectedFloor}
-            onSelectFloor={setSelectedFloor}
-            onSelectTable={handleSelectTable}
-          />
-        ) : (
-          <ProductGrid
-            menuItems={menuItems}
-            selectedCategory={selectedCategory}
-            showSearch={showSearch}
-            searchQuery={searchQuery}
-            onToggleSearch={() => { setShowSearch(!showSearch); setSearchQuery(''); }}
-            onSearchChange={setSearchQuery}
-            onItemTap={handleItemTap}
-            onBackToTables={leaveTable}
-            expandedItemId={expandedItemId}
-            modifierGroups={modifierGroups}
-            productModifierMap={productModifierMap}
-            onConfirmModifiers={handleConfirmModifiers}
-            onCancelModifiers={() => setExpandedItemId(null)}
-          />
-        )}
-
-        {selectedTable && (
-          <CategorySidebar
-            categories={categories}
-            selectedCategory={selectedCategory}
-            showSearch={showSearch}
-            onSelectCategory={handleSelectCategory}
-          />
-        )}
+        </div>
       </div>
 
       {showSentWarning && (

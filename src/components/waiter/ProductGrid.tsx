@@ -11,7 +11,8 @@ interface ProductGridProps {
   onToggleSearch: () => void;
   onSearchChange: (query: string) => void;
   onItemTap: (item: MenuItem) => void;
-  onBackToTables: () => void;
+  onBackToTables?: () => void;
+  hideBackButton?: boolean;
   expandedItemId?: string | null;
   modifierGroups?: ModifierGroup[];
   productModifierMap?: Map<string, string[]>;
@@ -37,6 +38,7 @@ const ProductButton = memo(function ProductButton({ item, onTap }: { item: MenuI
 export default function ProductGrid({
   menuItems, selectedCategory, showSearch, searchQuery,
   onToggleSearch, onSearchChange, onItemTap, onBackToTables,
+  hideBackButton,
   expandedItemId, modifierGroups, productModifierMap, onConfirmModifiers, onCancelModifiers,
 }: ProductGridProps) {
   const filteredItems = useMemo(() => {
@@ -49,12 +51,14 @@ export default function ProductGrid({
   return (
     <div className="flex-1 flex flex-col p-3">
       <div className="flex gap-2 mb-3 items-center">
-        <button
-          onClick={onBackToTables}
-          className="px-4 py-3 rounded-md bg-muted text-sm font-semibold pos-btn"
-        >
-          ← Masalar
-        </button>
+        {!hideBackButton && onBackToTables && (
+          <button
+            onClick={onBackToTables}
+            className="px-4 py-3 rounded-md bg-muted text-sm font-semibold pos-btn"
+          >
+            ← Masalar
+          </button>
+        )}
         <button
           onClick={onToggleSearch}
           className={`p-2.5 rounded-md border pos-btn ${showSearch ? 'bg-primary text-primary-foreground' : 'bg-card'}`}

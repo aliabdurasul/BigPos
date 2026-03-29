@@ -31,7 +31,7 @@ export default function OrderPanel({
   fullWidth,
 }: OrderPanelProps) {
   return (
-    <div className={`${fullWidth ? 'w-full' : 'w-80 shrink-0 border-r'} bg-card flex flex-col h-full`}>
+    <div className={`${fullWidth ? 'w-full' : 'w-full'} bg-card flex flex-col h-full`}>
       <div className="p-3 border-b flex items-center justify-between">
         <div>
           <h2 className="font-bold text-base">
