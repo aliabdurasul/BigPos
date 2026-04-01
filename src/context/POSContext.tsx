@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import {
   Category, MenuItem, Table, Order, OrderItem, OrderStatus,
   ModifierGroup, TableStatus, Payment, ModifierOption,
-  Staff, DailyClosure,
+  Staff, DailyClosure, ItemStatus,
 } from '@/types/pos';
 
 // ─── Context Type ──────────────────────────────────
@@ -57,6 +57,10 @@ interface POSContextType {
   completePayment: (orderId: string, amount: number, method: string, staffId?: string, discountAmount?: number, discountReason?: string) => Promise<void>;
   recordPrepayment: (orderId: string, amount: number, method?: string) => Promise<void>;
   payOrderItems: (orderId: string, itemIds: string[], amount: number, method: string, discountAmount?: number, discountReason?: string) => Promise<void>;
+  voidItem: (orderId: string, itemId: string) => Promise<void>;
+  returnItem: (orderId: string, itemId: string) => Promise<void>;
+  refundPayment: (orderId: string, amount: number, method: string) => Promise<void>;
+  applyItemDiscount: (orderId: string, itemId: string, amount: number, reason: string) => Promise<void>;
   refetchOrders: () => Promise<void>;
 }
 
@@ -108,6 +112,9 @@ function mapOrderItem(row: Record<string, unknown>, lookup?: Map<string, MenuIte
     modifiers: (row.modifiers as OrderItem['modifiers']) || [],
     note: (row.note as string) || undefined,
     paymentStatus: (row.payment_status as OrderItem['paymentStatus']) || 'unpaid',
+    itemStatus: ((row.item_status as ItemStatus) || 'active'),
+    discountAmount: row.discount_amount ? Number(row.discount_amount) : undefined,
+    discountReason: (row.discount_reason as string) || undefined,
   };
 }
 
@@ -646,7 +653,9 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
       return { ...o, payments: [...(o.payments || []), newPayment] };
     }));
     supabase.from('payments').insert({
-      id: paymentId, order_id: orderId, amount: payment.amount, method: payment.method, restaurant_id: restaurantId,
+      id: paymentId, order_id: orderId, amount: payment.amount, method: payment.method,
+      type: payment.type || 'payment',
+      restaurant_id: restaurantId,
       staff_id: payment.staffId || staffId || null,
       discount_amount: payment.discountAmount || 0,
       discount_reason: payment.discountReason || null,
@@ -737,6 +746,67 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
 
     await refetchOrders();
   }, [staffId, refetchOrders]);
+
+  // ─── Item Status & Discount Operations ────────
+
+  const voidItem = useCallback(async (orderId: string, itemId: string) => {
+    setOrders(prev => prev.map(o => o.id !== orderId ? o : {
+      ...o,
+      items: o.items.map(i => i.id !== itemId ? i : { ...i, itemStatus: 'cancelled' as ItemStatus }),
+    }));
+    const { error } = await supabase.from('order_items')
+      .update({ item_status: 'cancelled' })
+      .eq('id', itemId);
+    if (error) { console.error('voidItem error:', error); await refetchOrders(); }
+  }, [refetchOrders]);
+
+  const returnItem = useCallback(async (orderId: string, itemId: string) => {
+    setOrders(prev => prev.map(o => o.id !== orderId ? o : {
+      ...o,
+      items: o.items.map(i => i.id !== itemId ? i : { ...i, itemStatus: 'returned' as ItemStatus }),
+    }));
+    const { error } = await supabase.from('order_items')
+      .update({ item_status: 'returned' })
+      .eq('id', itemId);
+    if (error) { console.error('returnItem error:', error); await refetchOrders(); }
+  }, [refetchOrders]);
+
+  const refundPayment = useCallback(async (orderId: string, amount: number, method: string) => {
+    const paymentId = crypto.randomUUID();
+    const refund: Payment = {
+      id: paymentId,
+      orderId,
+      amount: -Math.abs(amount),   // stored as negative so totalPaid math stays correct
+      method: method as Payment['method'],
+      type: 'refund',
+      createdAt: new Date(),
+      staffId: staffId || undefined,
+    };
+    setOrders(prev => prev.map(o => o.id !== orderId ? o : {
+      ...o,
+      payments: [...(o.payments || []), refund],
+    }));
+    supabase.from('payments').insert({
+      id: paymentId,
+      order_id: orderId,
+      amount: -Math.abs(amount),
+      method,
+      type: 'refund',
+      restaurant_id: restaurantId,
+      staff_id: staffId || null,
+    }).then(({ error }) => { if (error) console.error('refundPayment error:', error); });
+  }, [restaurantId, staffId]);
+
+  const applyItemDiscount = useCallback(async (orderId: string, itemId: string, amount: number, reason: string) => {
+    setOrders(prev => prev.map(o => o.id !== orderId ? o : {
+      ...o,
+      items: o.items.map(i => i.id !== itemId ? i : { ...i, discountAmount: amount, discountReason: reason }),
+    }));
+    const { error } = await supabase.from('order_items')
+      .update({ discount_amount: amount, discount_reason: reason })
+      .eq('id', itemId);
+    if (error) { console.error('applyItemDiscount error:', error); await refetchOrders(); }
+  }, [refetchOrders]);
 
   // ─── Admin CRUD Helpers ────────────────────────
 
@@ -997,6 +1067,7 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
       markOrderReady, completePayment: completePaymentFn,
       recordPrepayment: recordPrepaymentFn,
       payOrderItems: payOrderItemsFn,
+      voidItem, returnItem, refundPayment, applyItemDiscount,
       refetchOrders,
     }}>
       {loading ? (

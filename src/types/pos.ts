@@ -8,9 +8,11 @@ export type OrderStatus = 'active' | 'ready' | 'paid';
 
 export type PaymentMethod = 'nakit' | 'kredi_karti' | 'bolunmus' | 'discount';
 
-export type PaymentType = 'payment' | 'prepayment';
+export type PaymentType = 'payment' | 'prepayment' | 'refund';
 
 export type OrderItemPaymentStatus = 'unpaid' | 'paid';
+
+export type ItemStatus = 'active' | 'cancelled' | 'returned';
 
 export type OrderSource = 'pos' | 'qr';
 
@@ -96,6 +98,9 @@ export interface OrderItem {
   modifiers: OrderItemModifier[];
   note?: string;
   paymentStatus?: OrderItemPaymentStatus;
+  itemStatus?: ItemStatus;
+  discountAmount?: number;
+  discountReason?: string;
 }
 
 export interface Payment {

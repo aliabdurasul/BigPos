@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { usePOS } from '@/context/POSContext';
 import { useAuth } from '@/context/AuthContext';
 import { OrderItem, Table, MenuItem, OrderItemModifier } from '@/types/pos';
-import { ArrowLeft, LogOut, Clock, AlertTriangle, ShoppingCart, Banknote, CreditCard, X, Plus, Minus, MessageSquare, Send, CheckCircle, Gift } from 'lucide-react';
+import { ArrowLeft, LogOut, Clock, AlertTriangle, ShoppingCart, Banknote } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { formatAdisyon, printReceipt } from '@/lib/receipt';
@@ -14,6 +14,7 @@ import ProductGrid from '@/components/waiter/ProductGrid';
 import CategorySidebar from '@/components/waiter/CategorySidebar';
 import { BottomSheetModifiers } from '@/components/waiter/ModifierModal';
 import CashierOrderPanel from '@/components/cashier/CashierOrderPanel';
+import CashierPaymentPanel, { ActionLogEntry } from '@/components/cashier/CashierPaymentPanel';
 
 function formatDuration(openedAt?: Date) {
   if (!openedAt) return '';
@@ -32,6 +33,7 @@ export default function CashierPOS() {
     setTableTotal, openTable, modifierGroups, floors,
     orders, restaurantName, productModifierMap, markOrderReady,
     completePayment, recordPrepayment, payOrderItems, staffId,
+    voidItem, returnItem, refundPayment, applyItemDiscount,
   } = usePOS();
   const { session, logout } = useAuth();
   const staffName = session?.name || null;
@@ -56,8 +58,7 @@ export default function CashierPOS() {
   const [, setTick] = useState(0);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [ikramItems, setIkramItems] = useState<Set<string>>(new Set());
-  const [showCashInput, setShowCashInput] = useState(false);
-  const [cashInputAmount, setCashInputAmount] = useState('');
+  const [actionLog, setActionLog] = useState<ActionLogEntry[]>([]);
 
   useEffect(() => {
     const interval = setInterval(() => setTick(t => t + 1), 15000);
@@ -85,8 +86,7 @@ export default function CashierPOS() {
   useEffect(() => {
     setSelectedItemId(null);
     setIkramItems(new Set());
-    setShowCashInput(false);
-    setCashInputAmount('');
+    setActionLog([]);
   }, [selectedTable?.id]);
 
   // Clear stale drafts when tables become available
@@ -317,15 +317,20 @@ export default function CashierPOS() {
     toast.success('Sipariş hazır — ödeme bekleniyor');
   };
 
+  // ─── Action log ────────────────────────────
+  const appendLog = useCallback((message: string, type: ActionLogEntry['type']) => {
+    setActionLog(prev => [...prev, { id: crypto.randomUUID(), ts: new Date(), message, type }]);
+  }, []);
+
   // ─── Payment handlers ─────────────────────
   const handleCompletePayment = async (amount: number, method: string, discountAmount?: number, discountReason?: string) => {
-    // Pay the first non-paid order; when it's paid, next call targets the next order
     const targetOrder = tableOrders.find(o => o.status === 'ready') || tableOrders[0];
     if (!targetOrder || isSubmitting) return;
     setIsSubmitting(true);
     try {
       await completePayment(targetOrder.id, amount, method, staffId || undefined, discountAmount, discountReason);
       const remaining = tableOrders.filter(o => o.id !== targetOrder.id);
+      appendLog(`${amount} ₺ ${method === 'nakit' ? 'nakit' : 'kart'} ödeme alındı`, 'payment');
       toast.success(remaining.length > 0
         ? `${amount} ₺ ödeme alındı — ${remaining.length} sipariş kaldı`
         : `${amount} ₺ ödeme tamamlandı — ${selectedTable?.name} kapatıldı`
@@ -344,6 +349,7 @@ export default function CashierPOS() {
     setIsSubmitting(true);
     try {
       await recordPrepayment(targetOrder.id, amount, method);
+      appendLog(`${amount} ₺ ön ödeme alındı`, 'payment');
       toast.success(`${amount} ₺ ön ödeme alındı`);
     } catch {
       toast.error('Ön ödeme kaydedilemedi');
@@ -356,7 +362,6 @@ export default function CashierPOS() {
     if (isSubmitting || tableOrders.length === 0) return;
     setIsSubmitting(true);
     try {
-      // Group selected items by their parent order
       const itemsByOrder = new Map<string, string[]>();
       for (const itemId of itemIds) {
         const parentOrder = tableOrders.find(o => o.items.some(i => i.id === itemId));
@@ -366,7 +371,6 @@ export default function CashierPOS() {
           itemsByOrder.set(parentOrder.id, existing);
         }
       }
-      // Pay each order's items separately
       for (const [orderId, orderItemIds] of itemsByOrder) {
         const orderAmount = tableOrders.find(o => o.id === orderId)!.items
           .filter(i => orderItemIds.includes(i.id))
@@ -376,6 +380,7 @@ export default function CashierPOS() {
           }, 0);
         await payOrderItems(orderId, orderItemIds, orderAmount, method, discountAmount, discountReason);
       }
+      appendLog(`${amount} ₺ ürün bazlı ödeme`, 'payment');
       toast.success(`${amount} ₺ ürün bazlı ödeme tamamlandı`);
       playSuccess();
     } catch {
@@ -385,7 +390,56 @@ export default function CashierPOS() {
     }
   };
 
-  // ─── Ikram & inline payment handlers ───────
+  // ─── Void / Return / Refund ───────────────
+  const handleVoidItem = useCallback(async (itemId: string) => {
+    const parentOrder = tableOrders.find(o => o.items.some(i => i.id === itemId));
+    if (!parentOrder) return;
+    const itemName = parentOrder.items.find(i => i.id === itemId)?.menuItem.name || '';
+    await voidItem(parentOrder.id, itemId);
+    appendLog(`İptal: ${itemName}`, 'void');
+    toast.info(`${itemName} iptal edildi`);
+    setSelectedItemId(null);
+  }, [tableOrders, voidItem, appendLog]);
+
+  const handleReturnItem = useCallback(async (itemId: string) => {
+    const parentOrder = tableOrders.find(o => o.items.some(i => i.id === itemId));
+    if (!parentOrder) return;
+    const itemName = parentOrder.items.find(i => i.id === itemId)?.menuItem.name || '';
+    await returnItem(parentOrder.id, itemId);
+    appendLog(`İade: ${itemName}`, 'return');
+    toast.info(`${itemName} iade edildi`);
+    setSelectedItemId(null);
+  }, [tableOrders, returnItem, appendLog]);
+
+  const handleRefundPayment = useCallback(async (amount: number, method: string) => {
+    const targetOrder = tableOrders[0];
+    if (!targetOrder || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await refundPayment(targetOrder.id, amount, method);
+      appendLog(`${amount} ₺ iade (${method === 'nakit' ? 'nakit' : 'kart'})`, 'refund');
+      toast.success(`${amount} ₺ iade edildi`);
+    } catch {
+      toast.error('İade başarısız');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [tableOrders, refundPayment, appendLog, isSubmitting]);
+
+  const handleItemDiscount = useCallback(async (itemId: string, amount: number, reason: string) => {
+    const parentOrder = tableOrders.find(o => o.items.some(i => i.id === itemId));
+    if (!parentOrder) return;
+    const itemName = parentOrder.items.find(i => i.id === itemId)?.menuItem.name || '';
+    await applyItemDiscount(parentOrder.id, itemId, amount, reason);
+    appendLog(`İndirim: ${itemName} -${amount}₺ (${reason})`, 'discount');
+    toast.success(`${itemName} için ${amount} ₺ indirim uygulandı`);
+  }, [tableOrders, applyItemDiscount, appendLog]);
+
+  const handleOrderDiscount = useCallback((amount: number, reason: string) => {
+    if (amount > 0) appendLog(`Sipariş indirimi: -${amount}₺ (${reason})`, 'discount');
+  }, [appendLog]);
+
+  // ─── Ikram toggle ─────────────────────────
   const handleToggleIkram = () => {
     if (!selectedItemId) return;
     setIkramItems(prev => {
@@ -393,61 +447,6 @@ export default function CashierPOS() {
       next.has(selectedItemId) ? next.delete(selectedItemId) : next.add(selectedItemId);
       return next;
     });
-  };
-
-  const handleCashPay = async () => {
-    const amount = Number(cashInputAmount);
-    if (amount <= 0 || !tableOrders.length) return;
-    const targetOrder = tableOrders.find(o => o.status === 'ready') || tableOrders[0];
-    if (!targetOrder || isSubmitting) return;
-    setIsSubmitting(true);
-    try {
-      await completePayment(targetOrder.id, Math.min(amount, remainingAmount), 'nakit', staffId || undefined, ikramDeduction > 0 ? ikramDeduction : undefined, ikramDeduction > 0 ? 'İkram' : undefined);
-      setCashInputAmount('');
-      setShowCashInput(false);
-      playSuccess();
-      toast.success(`${amount} ₺ nakit alındı`);
-    } catch {
-      toast.error('Ödeme başarısız');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleCardPay = async () => {
-    const targetOrder = tableOrders.find(o => o.status === 'ready') || tableOrders[0];
-    if (!targetOrder || isSubmitting || remainingAmount <= 0) return;
-    setIsSubmitting(true);
-    try {
-      await completePayment(targetOrder.id, remainingAmount, 'kredi_karti', staffId || undefined, ikramDeduction > 0 ? ikramDeduction : undefined, ikramDeduction > 0 ? 'İkram' : undefined);
-      playSuccess();
-      toast.success(`${remainingAmount} ₺ kart ile ödendi`);
-    } catch {
-      toast.error('Ödeme başarısız');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleKapatHesap = async () => {
-    if (!tableOrders.length || isSubmitting) return;
-    setIsSubmitting(true);
-    try {
-      for (const order of tableOrders) {
-        if (order.status !== 'paid') {
-          const orderRemaining = Math.max(0, order.total - (order.payments || []).reduce((s, p) => s + p.amount, 0));
-          if (orderRemaining > 0) {
-            await completePayment(order.id, orderRemaining, 'nakit', staffId || undefined);
-          }
-        }
-      }
-      playSuccess();
-      toast.success('Hesap kapatıldı');
-    } catch {
-      toast.error('Hesap kapatılamadı');
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   const handleSelectCategory = (catId: string) => {
@@ -475,6 +474,21 @@ export default function CashierPOS() {
     onSaveNote: handleSaveNote,
     onEditNoteTextChange: setEditNoteText,
     onPrintAdisyon: printAdisyon,
+    onUpdateQty: handleUpdateQty,
+    onRemoveItem: handleRemoveItem,
+    onToggleIkram: (id: string) => {
+      setIkramItems(prev => {
+        const next = new Set(prev);
+        next.has(id) ? next.delete(id) : next.add(id);
+        return next;
+      });
+    },
+    onVoidItem: handleVoidItem,
+    onReturnItem: handleReturnItem,
+    newItemCount,
+    onSendToKitchen: sendToKitchen,
+    onClearOrder: clearOrder,
+    isSubmitting,
   };
 
   // ─── Mobile Layout ─────────────────────────
@@ -645,157 +659,52 @@ export default function CashierPOS() {
         </div>
       )}
 
-      {/* State 2: Table selected — sticky top bar + split layout */}
+      {/* State 2: Table selected — 3-column layout */}
       {selectedTable && (
-        <div className="flex flex-col flex-1 min-h-0">
-          {/* ─── Sticky Payment Top Bar ──────────────────── */}
-          <div className="shrink-0 bg-card border-b px-3 py-2 flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-2 mr-auto">
-              {tableOrders.length > 0 && (
-                <span className="text-sm font-bold">
-                  Kalan: <span className="text-primary">{remainingAmount} ₺</span>
-                </span>
-              )}
-              {ikramDeduction > 0 && (
-                <span className="text-xs text-amber-600 font-semibold flex items-center gap-1">
-                  <Gift className="w-3 h-3" /> İkram: -{ikramDeduction} ₺
-                </span>
-              )}
-            </div>
-            <button
-              onClick={() => { setShowCashInput(v => !v); }}
-              disabled={!tableOrders.length || remainingAmount <= 0}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white font-bold text-sm pos-btn disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <Banknote className="w-4 h-4" /> NAKİT
-            </button>
-            <button
-              onClick={handleCardPay}
-              disabled={isSubmitting || !tableOrders.length || remainingAmount <= 0}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm pos-btn disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <CreditCard className="w-4 h-4" /> KART
-            </button>
-            <button
-              onClick={handleKapatHesap}
-              disabled={isSubmitting || !tableOrders.length}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-destructive hover:bg-destructive/90 text-destructive-foreground font-bold text-sm pos-btn disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <X className="w-4 h-4" /> HESAP KAPAT
-            </button>
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+
+          {/* LEFT 25%: Order Panel */}
+          <div className="w-[25%] shrink-0 border-r flex flex-col min-h-0 overflow-hidden">
+            <CashierOrderPanel {...orderPanelProps} />
           </div>
 
-          {/* Inline cash input row */}
-          {showCashInput && (
-            <div className="shrink-0 bg-muted/50 border-b px-3 py-2 flex items-center gap-2">
-              <span className="text-xs font-semibold text-muted-foreground">Nakit tutar:</span>
-              <input
-                autoFocus
-                type="number"
-                value={cashInputAmount}
-                onChange={e => setCashInputAmount(e.target.value)}
-                placeholder={`${remainingAmount} ₺`}
-                className="w-28 px-2 py-1.5 rounded-lg border bg-card text-sm"
-                onKeyDown={e => e.key === 'Enter' && handleCashPay()}
-              />
-              <button
-                onClick={handleCashPay}
-                disabled={isSubmitting || !cashInputAmount || Number(cashInputAmount) <= 0}
-                className="px-3 py-1.5 rounded-lg bg-green-600 text-white font-bold text-sm pos-btn disabled:opacity-40"
-              >
-                Onayla
-              </button>
-              <button onClick={() => { setShowCashInput(false); setCashInputAmount(''); }} className="px-2 py-1.5 rounded-lg bg-muted text-muted-foreground font-semibold text-sm pos-btn">
-                İptal
-              </button>
-            </div>
-          )}
+          {/* CENTRE 45%: Categories + Products */}
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden border-r">
+            <CategorySidebar
+              categories={categories}
+              selectedCategory={selectedCategory}
+              showSearch={showSearch}
+              onSelectCategory={handleSelectCategory}
+              horizontal
+            />
+            <ProductGrid
+              menuItems={menuItems}
+              selectedCategory={selectedCategory}
+              showSearch={showSearch}
+              searchQuery={searchQuery}
+              onToggleSearch={() => { setShowSearch(!showSearch); setSearchQuery(''); }}
+              onSearchChange={setSearchQuery}
+              onItemTap={handleItemTap}
+              hideBackButton
+              expandedItemId={expandedItemId}
+              modifierGroups={modifierGroups}
+              productModifierMap={productModifierMap}
+              onConfirmModifiers={handleConfirmModifiers}
+              onCancelModifiers={() => setExpandedItemId(null)}
+            />
+          </div>
 
-          {/* Split: Left order panel (35%) + Right products (65%) */}
-          <div className="flex flex-1 min-h-0">
-            {/* LEFT: Order Panel */}
-            <div className="w-[35%] shrink-0 border-r flex flex-col min-h-0 overflow-hidden">
-              <CashierOrderPanel {...orderPanelProps} />
-
-              {/* ─── Bottom Action Bar ──────────────────── */}
-              <div className="shrink-0 border-t p-2 space-y-1.5">
-                {selectedItemId && (
-                  <div className="flex gap-1.5">
-                    <button
-                      onClick={() => handleUpdateQty(selectedItemId, -1)}
-                      className="flex-1 py-2 rounded-lg bg-muted flex items-center justify-center gap-1 font-bold text-sm pos-btn"
-                    >
-                      <Minus className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleUpdateQty(selectedItemId, 1)}
-                      className="flex-1 py-2 rounded-lg bg-muted flex items-center justify-center gap-1 font-bold text-sm pos-btn"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={handleToggleIkram}
-                      className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-1 font-bold text-sm pos-btn ${
-                        ikramItems.has(selectedItemId)
-                          ? 'bg-amber-100 text-amber-700 border border-amber-300'
-                          : 'bg-muted text-muted-foreground'
-                      }`}
-                    >
-                      <Gift className="w-4 h-4" /> İkram
-                    </button>
-                    <button
-                      onClick={() => handleRemoveItem(selectedItemId)}
-                      className="flex-1 py-2 rounded-lg bg-destructive/10 text-destructive flex items-center justify-center gap-1 font-bold text-sm pos-btn"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-                {newItemCount > 0 && (
-                  <button
-                    onClick={sendToKitchen}
-                    disabled={!selectedTable || orderItems.length === 0}
-                    className="w-full py-2.5 rounded-md bg-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 pos-btn disabled:opacity-40"
-                  >
-                    <Send className="w-4 h-4" /> Mutfağa Gönder ({newItemCount})
-                  </button>
-                )}
-                {hasActiveOrders && (
-                  <button
-                    onClick={handleMarkReady}
-                    className="w-full py-2 rounded-md bg-pos-warning text-pos-warning-foreground font-bold text-sm flex items-center justify-center gap-2 pos-btn"
-                  >
-                    <CheckCircle className="w-4 h-4" /> Sipariş Hazır
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* RIGHT: Categories + Products */}
-            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-              <CategorySidebar
-                categories={categories}
-                selectedCategory={selectedCategory}
-                showSearch={showSearch}
-                onSelectCategory={handleSelectCategory}
-                horizontal
-              />
-              <ProductGrid
-                menuItems={menuItems}
-                selectedCategory={selectedCategory}
-                showSearch={showSearch}
-                searchQuery={searchQuery}
-                onToggleSearch={() => { setShowSearch(!showSearch); setSearchQuery(''); }}
-                onSearchChange={setSearchQuery}
-                onItemTap={handleItemTap}
-                hideBackButton
-                expandedItemId={expandedItemId}
-                modifierGroups={modifierGroups}
-                productModifierMap={productModifierMap}
-                onConfirmModifiers={handleConfirmModifiers}
-                onCancelModifiers={() => setExpandedItemId(null)}
-              />
-            </div>
+          {/* RIGHT 30%: Payment Panel */}
+          <div className="w-[30%] shrink-0 flex flex-col min-h-0 overflow-hidden">
+            <CashierPaymentPanel
+              tableOrders={tableOrders}
+              isSubmitting={isSubmitting}
+              onCompletePayment={handleCompletePayment}
+              onRefund={handleRefundPayment}
+              onOrderDiscount={handleOrderDiscount}
+              onPrintAdisyon={printAdisyon}
+              actionLog={actionLog}
+            />
           </div>
         </div>
       )}
