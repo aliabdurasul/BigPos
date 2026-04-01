@@ -23,15 +23,16 @@ interface TableGridProps {
   selectedTableId?: string;
 }
 
-const TableCard = memo(function TableCard({ table, prepay, onSelect, compact, fullscreen, selected }: {
+const TableCard = memo(function TableCard({ table, prepay, orderCount, onSelect, compact, fullscreen, selected }: {
   table: Table;
   prepay: number;
+  orderCount: number;
   onSelect: () => void;
   compact?: boolean;
   fullscreen?: boolean;
   selected?: boolean;
 }) {
-  const isLocked = table.status === 'waiting_payment';
+  const isWaitingPayment = table.status === 'waiting_payment';
   const sizeClass = compact ? 'p-2 min-h-[56px]' : fullscreen ? 'p-4 min-h-[100px]' : 'p-3 min-h-[72px]';
   const nameClass = compact ? 'text-sm' : fullscreen ? 'text-2xl' : 'text-lg';
   const showDetails = !compact;
@@ -39,8 +40,7 @@ const TableCard = memo(function TableCard({ table, prepay, onSelect, compact, fu
   return (
     <button
       onClick={onSelect}
-      disabled={isLocked}
-      className={`flex flex-col items-center justify-center ${sizeClass} rounded-md border ${TABLE_STATUS_COLORS[table.status]} ${TABLE_STATUS_BORDER_COLORS[table.status]} pos-btn transition-colors ${isLocked ? 'opacity-70 cursor-not-allowed' : ''} ${selected ? 'ring-2 ring-primary ring-offset-1' : ''}`}
+      className={`flex flex-col items-center justify-center ${sizeClass} rounded-md border ${TABLE_STATUS_COLORS[table.status]} ${TABLE_STATUS_BORDER_COLORS[table.status]} pos-btn transition-colors ${selected ? 'ring-2 ring-primary ring-offset-1' : ''}`}
     >
       <span className={`${nameClass} font-bold`}>{table.name.replace('Masa ', '')}</span>
       {showDetails && <span className={`${fullscreen ? 'text-xs' : 'text-[10px]'} opacity-60`}>{table.name}</span>}
@@ -55,8 +55,11 @@ const TableCard = memo(function TableCard({ table, prepay, onSelect, compact, fu
           <Clock className={`${fullscreen ? 'w-3 h-3' : 'w-2.5 h-2.5'}`} /> {formatDuration(table.openedAt)}
         </span>
       )}
-      {isLocked && (
-        <span className={`${compact ? 'text-[8px]' : fullscreen ? 'text-xs' : 'text-[9px]'} font-bold text-amber-600 mt-0.5`}>KASA BEKLIYOR</span>
+      {showDetails && orderCount > 1 && (
+        <span className={`${fullscreen ? 'text-[10px]' : 'text-[8px]'} font-semibold text-muted-foreground mt-0.5`}>{orderCount} sipariş</span>
+      )}
+      {isWaitingPayment && (
+        <span className={`${compact ? 'text-[8px]' : fullscreen ? 'text-xs' : 'text-[9px]'} font-bold text-amber-600 mt-0.5 animate-pulse`}>KASA BEKLIYOR</span>
       )}
     </button>
   );
@@ -100,6 +103,7 @@ export default function TableGrid({ tables, orders, floors, selectedFloor, onSel
               key={t.id}
               table={t}
               prepay={tPrepay}
+              orderCount={tOrders.length}
               onSelect={() => onSelectTable(t)}
               compact={compact}
               fullscreen={fullscreen}

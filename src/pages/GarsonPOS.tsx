@@ -97,10 +97,6 @@ export default function GarsonPOS() {
   }, [selectedTable, orderItems, saveDrafts, isMobile]);
 
   const handleSelectTable = useCallback((t: Table) => {
-    if (t.status === 'waiting_payment') {
-      toast.info('Ödeme bekleniyor — müşteriyi kasaya yönlendirin');
-      return;
-    }
     if (selectedTable) {
       saveDrafts(selectedTable.id, orderItems);
     }
@@ -129,6 +125,7 @@ export default function GarsonPOS() {
 
   const newItemCount = orderItems.filter(i => !(i as any)._fromDB).length;
   const hasActiveOrders = selectedTable ? orders.some(o => o.tableId === selectedTable.id && o.status === 'active') : false;
+  const tableIsWaitingPayment = currentTableInContext?.status === 'waiting_payment';
 
   const handleItemTap = useCallback((item: MenuItem) => {
     if (!selectedTable) {
@@ -351,7 +348,15 @@ export default function GarsonPOS() {
           )}
 
           {mobileTab === 'menu' && selectedTable && (
-            <>
+            <div className="flex-1 flex flex-col relative">
+              {tableIsWaitingPayment && (
+                <div className="absolute inset-0 z-10 bg-background/60 flex items-center justify-center">
+                  <div className="bg-amber-50 border border-amber-300 rounded-lg px-6 py-4 text-center shadow-md">
+                    <p className="text-amber-700 font-bold text-base">Ödeme Bekleniyor</p>
+                    <p className="text-amber-600 text-sm mt-1">Müşteriyi kasaya yönlendirin</p>
+                  </div>
+                </div>
+              )}
               <CategorySidebar
                 categories={categories}
                 selectedCategory={selectedCategory}
@@ -369,7 +374,7 @@ export default function GarsonPOS() {
                 onItemTap={handleItemTap}
                 hideBackButton
               />
-            </>
+            </div>
           )}
 
           {mobileTab === 'order' && (
@@ -495,7 +500,15 @@ export default function GarsonPOS() {
       {selectedTable && (
         <div className="flex flex-1 min-h-0">
           {/* LEFT: Categories + Products — 70% */}
-          <div className="w-[70%] flex flex-col min-h-0 overflow-hidden">
+          <div className="w-[70%] flex flex-col min-h-0 overflow-hidden relative">
+            {tableIsWaitingPayment && (
+              <div className="absolute inset-0 z-10 bg-background/60 flex items-center justify-center">
+                <div className="bg-amber-50 border border-amber-300 rounded-lg px-6 py-4 text-center shadow-md">
+                  <p className="text-amber-700 font-bold text-base">Ödeme Bekleniyor</p>
+                  <p className="text-amber-600 text-sm mt-1">Müşteriyi kasaya yönlendirin</p>
+                </div>
+              </div>
+            )}
             <CategorySidebar
               categories={categories}
               selectedCategory={selectedCategory}

@@ -154,10 +154,10 @@ function mapStaff(row: Record<string, unknown>): Staff {
 }
 
 function deriveTableStatus(allOrders: Order[], tableId: string): TableStatus {
-  const active = allOrders.filter(o => o.tableId === tableId && o.status !== 'paid');
-  if (active.length === 0) return 'available';
-  if (active.some(o => o.status === 'ready')) return 'waiting_payment';
-  return 'occupied';
+  const unpaid = allOrders.filter(o => o.tableId === tableId && o.status !== 'paid');
+  if (unpaid.length === 0) return 'available';
+  if (unpaid.some(o => o.status === 'active')) return 'occupied';
+  return 'waiting_payment';
 }
 
 const ACTIVE_ORDER_STATUSES = ['active', 'ready'];

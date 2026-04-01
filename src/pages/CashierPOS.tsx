@@ -131,11 +131,6 @@ export default function CashierPOS() {
     [orderItems]
   );
 
-  const selectedOrder = useMemo(() => {
-    if (!selectedTable) return null;
-    return orders.find(o => o.tableId === selectedTable.id && o.status !== 'paid') || null;
-  }, [orders, selectedTable]);
-
   const tableOrders = selectedTable ? orders.filter(o => o.tableId === selectedTable.id && o.status !== 'paid') : [];
   const totalPaid = tableOrders.reduce((sum, o) => sum + (o.payments || []).reduce((s, p) => s + p.amount, 0), 0);
   const totalPrepayment = tableOrders.reduce((sum, o) => (o.payments || []).filter(p => p.type === 'prepayment').reduce((s, p) => s + p.amount, sum), 0);
@@ -304,11 +299,17 @@ export default function CashierPOS() {
 
   // ─── Payment handlers ─────────────────────
   const handleCompletePayment = async (amount: number, method: string, discountAmount?: number, discountReason?: string) => {
-    if (!selectedOrder || isSubmitting) return;
+    // Pay the first non-paid order; when it's paid, next call targets the next order
+    const targetOrder = tableOrders.find(o => o.status === 'ready') || tableOrders[0];
+    if (!targetOrder || isSubmitting) return;
     setIsSubmitting(true);
     try {
-      await completePayment(selectedOrder.id, amount, method, staffId || undefined, discountAmount, discountReason);
-      toast.success(`${amount} ₺ ödeme tamamlandı — ${selectedTable?.name} kapatıldı`);
+      await completePayment(targetOrder.id, amount, method, staffId || undefined, discountAmount, discountReason);
+      const remaining = tableOrders.filter(o => o.id !== targetOrder.id);
+      toast.success(remaining.length > 0
+        ? `${amount} ₺ ödeme alındı — ${remaining.length} sipariş kaldı`
+        : `${amount} ₺ ödeme tamamlandı — ${selectedTable?.name} kapatıldı`
+      );
       playSuccess();
     } catch {
       toast.error('Ödeme işlemi başarısız');
@@ -318,10 +319,11 @@ export default function CashierPOS() {
   };
 
   const handlePrepayment = async (amount: number, method: string) => {
-    if (!selectedOrder || isSubmitting) return;
+    const targetOrder = tableOrders[0];
+    if (!targetOrder || isSubmitting) return;
     setIsSubmitting(true);
     try {
-      await recordPrepayment(selectedOrder.id, amount, method);
+      await recordPrepayment(targetOrder.id, amount, method);
       toast.success(`${amount} ₺ ön ödeme alındı`);
     } catch {
       toast.error('Ön ödeme kaydedilemedi');
@@ -331,10 +333,29 @@ export default function CashierPOS() {
   };
 
   const handlePayOrderItems = async (itemIds: string[], amount: number, method: string, discountAmount?: number, discountReason?: string) => {
-    if (!selectedOrder || isSubmitting) return;
+    if (isSubmitting || tableOrders.length === 0) return;
     setIsSubmitting(true);
     try {
-      await payOrderItems(selectedOrder.id, itemIds, amount, method, discountAmount, discountReason);
+      // Group selected items by their parent order
+      const itemsByOrder = new Map<string, string[]>();
+      for (const itemId of itemIds) {
+        const parentOrder = tableOrders.find(o => o.items.some(i => i.id === itemId));
+        if (parentOrder) {
+          const existing = itemsByOrder.get(parentOrder.id) || [];
+          existing.push(itemId);
+          itemsByOrder.set(parentOrder.id, existing);
+        }
+      }
+      // Pay each order's items separately
+      for (const [orderId, orderItemIds] of itemsByOrder) {
+        const orderAmount = tableOrders.find(o => o.id === orderId)!.items
+          .filter(i => orderItemIds.includes(i.id))
+          .reduce((sum, i) => {
+            const modExtra = i.modifiers.reduce((s, m) => s + m.extraPrice, 0);
+            return sum + (i.menuItem.price + modExtra) * i.quantity;
+          }, 0);
+        await payOrderItems(orderId, orderItemIds, orderAmount, method, discountAmount, discountReason);
+      }
       toast.success(`${amount} ₺ ürün bazlı ödeme tamamlandı`);
       playSuccess();
     } catch {
@@ -373,7 +394,7 @@ export default function CashierPOS() {
     onPrintAdisyon: printAdisyon,
     onMarkReady: handleMarkReady,
     hasActiveOrders,
-    order: selectedOrder,
+    tableOrders,
     restaurantName,
     staffName: staffName || '',
     onCompletePayment: handleCompletePayment,

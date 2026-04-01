@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { OrderItem, Table, Order } from '@/types/pos';
 import {
   Minus, Plus, X, Send, Trash2, MessageSquare, Printer, CheckCircle,
@@ -27,8 +27,8 @@ interface CashierOrderPanelProps {
   onMarkReady?: () => void;
   hasActiveOrders?: boolean;
   fullWidth?: boolean;
-  // Payment props
-  order: Order | null;
+  // Payment props — table-level
+  tableOrders: Order[];
   restaurantName: string;
   staffName: string;
   onCompletePayment: (amount: number, method: string, discountAmount?: number, discountReason?: string) => void;
@@ -43,7 +43,7 @@ export default function CashierOrderPanel({
   onUpdateQty, onRemoveItem, onEditNote, onSaveNote, onEditNoteTextChange,
   onSendToKitchen, onClearOrder, onPrintAdisyon, onMarkReady, hasActiveOrders,
   fullWidth,
-  order, restaurantName, staffName,
+  tableOrders, restaurantName, staffName,
   onCompletePayment, onPrepayment, onPayOrderItems,
   isSubmitting,
 }: CashierOrderPanelProps) {
@@ -60,7 +60,8 @@ export default function CashierOrderPanel({
   const [discountReason, setDiscountReason] = useState('');
   const [prepaymentInput, setPrepaymentInput] = useState('');
 
-  // Reset payment state when order changes
+  // Reset payment state when table changes
+  const tableOrderIds = tableOrders.map(o => o.id).sort().join(',');
   useEffect(() => {
     setShowPayment(false);
     setPaymentMethod('nakit');
@@ -72,14 +73,16 @@ export default function CashierOrderPanel({
     setDiscountValue('');
     setDiscountReason('');
     setPrepaymentInput('');
-  }, [order?.id]);
+  }, [tableOrderIds]);
 
-  // ─── Payment computed values ────────────────
-  const orderTotal = order?.total ?? total;
-  const allPayments = order?.payments || [];
+  // ─── Payment computed values (aggregated across all table orders) ────────────────
+  const orderTotal = useMemo(() => tableOrders.reduce((sum, o) => sum + o.total, 0) || total, [tableOrders, total]);
+  const allPayments = useMemo(() => tableOrders.flatMap(o => o.payments || []), [tableOrders]);
   const computedTotalPaid = allPayments.reduce((sum, p) => sum + p.amount, 0);
   const computedPrepaymentTotal = allPayments.filter(p => p.type === 'prepayment').reduce((sum, p) => sum + p.amount, 0);
   const paymentTotal = allPayments.filter(p => p.type === 'payment').reduce((sum, p) => sum + p.amount, 0);
+  const allOrderItems = useMemo(() => tableOrders.flatMap(o => o.items), [tableOrders]);
+  const hasOrders = tableOrders.length > 0;
 
   const discountAmount = discountValue
     ? discountType === 'percentage'
@@ -91,8 +94,8 @@ export default function CashierOrderPanel({
   const payRemainingAmount = Math.max(0, effectiveTotal - computedTotalPaid);
 
   const getPayAmount = () => {
-    if (advancedMode === 'split_item' && order) {
-      return order.items
+    if (advancedMode === 'split_item' && hasOrders) {
+      return allOrderItems
         .filter(i => selectedPayItems.has(i.id))
         .reduce((sum, i) => {
           const modExtra = i.modifiers.reduce((s, m) => s + m.extraPrice, 0);
@@ -140,14 +143,14 @@ export default function CashierOrderPanel({
   };
 
   const handlePrintReceipt = () => {
-    if (!order) return;
+    if (!hasOrders) return;
     printReceipt(
       formatAdisyon({
         restaurantName: restaurantName || 'RESTORAN',
         tableName: selectedTable?.name || '',
         staffName: staffName || '',
         date: new Date(),
-        items: order.items.map(i => ({
+        items: allOrderItems.map(i => ({
           name: i.menuItem.name,
           qty: i.quantity,
           unitPrice: i.menuItem.price + i.modifiers.reduce((s, m) => s + m.extraPrice, 0),
@@ -160,22 +163,104 @@ export default function CashierOrderPanel({
 
   const newItemCount = orderItems.filter(i => !(i as any)._fromDB).length;
 
+  const renderItem = (item: OrderItem) => (
+    <div key={item.id} className={`p-2.5 rounded-lg animate-slide-in ${(item as any)._fromDB ? 'bg-muted/30 border border-border' : 'bg-muted/40'}`}>
+      <div className="flex items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-semibold truncate">{item.menuItem.name}</p>
+            {(item as any)._fromDB && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-bold shrink-0">GÖNDERİLDİ</span>
+            )}
+            {item.paymentStatus === 'paid' && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-pos-success/20 text-pos-success font-bold shrink-0">ÖDENDİ</span>
+            )}
+          </div>
+          {item.modifiers.length > 0 && (
+            <div className="mt-0.5">
+              {item.modifiers.map((m, i) => (
+                <p key={i} className="text-[11px] text-muted-foreground leading-tight">
+                  • {m.optionName} {m.extraPrice > 0 && `+${m.extraPrice}₺`}
+                </p>
+              ))}
+            </div>
+          )}
+          {item.note && (
+            <p className="text-[11px] text-muted-foreground font-medium mt-0.5 italic">Not: {item.note}</p>
+          )}
+          {editNoteId === item.id && (
+            <div className="flex gap-1 mt-1">
+              <input
+                autoFocus
+                value={editNoteText}
+                onChange={e => onEditNoteTextChange(e.target.value)}
+                placeholder="Not ekle..."
+                className="flex-1 text-xs px-2 py-1.5 rounded-lg border bg-card"
+                onKeyDown={e => e.key === 'Enter' && onSaveNote(item.id)}
+              />
+              <button onClick={() => onSaveNote(item.id)} className="text-xs px-2 py-1.5 rounded-lg bg-primary text-primary-foreground font-bold pos-btn">✓</button>
+            </div>
+          )}
+          <p className="text-xs text-primary font-bold mt-0.5">
+            {(item.menuItem.price + item.modifiers.reduce((s, m) => s + m.extraPrice, 0)) * item.quantity} ₺
+          </p>
+        </div>
+        <div className="flex flex-col items-center gap-1 shrink-0">
+          <div className="flex items-center gap-1">
+            <button onClick={() => onUpdateQty(item.id, -1)} className="w-11 h-11 rounded-md bg-card border flex items-center justify-center pos-btn">
+              <Minus className="w-4 h-4" />
+            </button>
+            <span className="w-7 text-center text-sm font-bold">{item.quantity}</span>
+            <button onClick={() => onUpdateQty(item.id, 1)} className="w-11 h-11 rounded-md bg-card border flex items-center justify-center pos-btn">
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex items-center gap-1">
+            <button onClick={() => onEditNote(item.id)} className="w-9 h-9 rounded-lg text-muted-foreground hover:bg-muted flex items-center justify-center pos-btn">
+              <MessageSquare className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={() => onRemoveItem(item.id)} className="w-9 h-9 rounded-lg text-destructive/70 hover:bg-destructive/10 flex items-center justify-center pos-btn">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className={`${fullWidth ? 'w-full' : 'w-full'} bg-card flex flex-col h-full`}>
       {/* ─── Header ──────────────────────── */}
-      <div className="p-3 border-b flex items-center justify-between">
-        <div>
-          <h2 className="font-bold text-base">
-            {selectedTable ? selectedTable.name : 'Masa Seçin'}
-          </h2>
-          {computedTotalPaid > 0 && (
-            <p className="text-xs text-pos-success font-semibold mt-0.5">Ödenen: {computedTotalPaid} ₺</p>
+      <div className="p-3 border-b">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-bold text-base">
+              {selectedTable ? selectedTable.name : 'Masa Seçin'}
+            </h2>
+            {hasOrders && (
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                {tableOrders.length} sipariş
+                {computedTotalPaid > 0 && <span className="text-pos-success font-semibold ml-2">Ödenen: {computedTotalPaid} ₺</span>}
+              </p>
+            )}
+          </div>
+          {selectedTable && orderItems.length > 0 && (
+            <button onClick={onPrintAdisyon} className="p-2 rounded-lg hover:bg-muted pos-btn" title="Adisyon Yazdır">
+              <Printer className="w-4 h-4" />
+            </button>
           )}
         </div>
-        {selectedTable && orderItems.length > 0 && (
-          <button onClick={onPrintAdisyon} className="p-2 rounded-lg hover:bg-muted pos-btn" title="Adisyon Yazdır">
-            <Printer className="w-4 h-4" />
-          </button>
+        {/* Order status badges */}
+        {tableOrders.length > 1 && (
+          <div className="flex gap-1.5 mt-2 flex-wrap">
+            {tableOrders.map((o, idx) => (
+              <span key={o.id} className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                o.status === 'ready' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
+              }`}>
+                #{idx + 1} {o.status === 'ready' ? 'Hazır' : 'Aktif'} · {o.total} ₺
+              </span>
+            ))}
+          </div>
         )}
       </div>
 
@@ -187,71 +272,25 @@ export default function CashierOrderPanel({
           </p>
         ) : (
           <div className="space-y-1.5">
-            {orderItems.map(item => (
-              <div key={item.id} className={`p-2.5 rounded-lg animate-slide-in ${(item as any)._fromDB ? 'bg-muted/30 border border-border' : 'bg-muted/40'}`}>
-                <div className="flex items-start gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-sm font-semibold truncate">{item.menuItem.name}</p>
-                      {(item as any)._fromDB && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-bold shrink-0">GÖNDERİLDİ</span>
-                      )}
-                    </div>
-                    {item.modifiers.length > 0 && (
-                      <div className="mt-0.5">
-                        {item.modifiers.map((m, i) => (
-                          <p key={i} className="text-[11px] text-muted-foreground leading-tight">
-                            • {m.optionName} {m.extraPrice > 0 && `+${m.extraPrice}₺`}
-                          </p>
-                        ))}
-                      </div>
-                    )}
-                    {item.note && (
-                      <p className="text-[11px] text-muted-foreground font-medium mt-0.5 italic">Not: {item.note}</p>
-                    )}
-                    {editNoteId === item.id && (
-                      <div className="flex gap-1 mt-1">
-                        <input
-                          autoFocus
-                          value={editNoteText}
-                          onChange={e => onEditNoteTextChange(e.target.value)}
-                          placeholder="Not ekle..."
-                          className="flex-1 text-xs px-2 py-1.5 rounded-lg border bg-card"
-                          onKeyDown={e => e.key === 'Enter' && onSaveNote(item.id)}
-                        />
-                        <button onClick={() => onSaveNote(item.id)} className="text-xs px-2 py-1.5 rounded-lg bg-primary text-primary-foreground font-bold pos-btn">✓</button>
-                      </div>
-                    )}
-                    <p className="text-xs text-primary font-bold mt-0.5">
-                      {(item.menuItem.price + item.modifiers.reduce((s, m) => s + m.extraPrice, 0)) * item.quantity} ₺
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-center gap-1 shrink-0">
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => onUpdateQty(item.id, -1)} className="w-11 h-11 rounded-md bg-card border flex items-center justify-center pos-btn">
-                        <Minus className="w-4 h-4" />
-                      </button>
-                      <span className="w-7 text-center text-sm font-bold">{item.quantity}</span>
-                      <button onClick={() => onUpdateQty(item.id, 1)} className="w-11 h-11 rounded-md bg-card border flex items-center justify-center pos-btn">
-                        <Plus className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => onEditNote(item.id)} className="w-9 h-9 rounded-lg text-muted-foreground hover:bg-muted flex items-center justify-center pos-btn">
-                        <MessageSquare className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => onRemoveItem(item.id)} className="w-9 h-9 rounded-lg text-destructive/70 hover:bg-destructive/10 flex items-center justify-center pos-btn">
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
+            {/* Sent items section */}
+            {orderItems.some(i => (i as any)._fromDB) && (
+              <div className="flex items-center gap-2 px-1 pt-1 pb-0.5">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Gönderilmiş Siparişler</span>
+                <div className="flex-1 border-t border-border" />
               </div>
-            ))}
+            )}
+            {orderItems.filter(i => (i as any)._fromDB).map(item => renderItem(item))}
+            {/* Draft items section */}
+            {orderItems.some(i => !(i as any)._fromDB) && (
+              <div className="flex items-center gap-2 px-1 pt-2 pb-0.5">
+                <span className="text-[10px] font-bold text-primary uppercase tracking-wide">Yeni Eklenenler</span>
+                <div className="flex-1 border-t border-primary/30" />
+              </div>
+            )}
+            {orderItems.filter(i => !(i as any)._fromDB).map(item => renderItem(item))}
           </div>
         )}
       </div>
-
       {/* ─── Footer ──────────────────────── */}
       <div className="p-3 border-t space-y-2">
         <div className="flex justify-between items-center">
@@ -287,7 +326,7 @@ export default function CashierOrderPanel({
         )}
 
         {/* Payment Toggle */}
-        {order && (
+        {hasOrders && (
           <button
             onClick={() => setShowPayment(!showPayment)}
             className={`w-full py-3 rounded-md font-bold text-sm flex items-center justify-center gap-2 pos-btn transition-all ${
@@ -312,7 +351,7 @@ export default function CashierOrderPanel({
       </div>
 
       {/* ─── Collapsible Payment Section ─── */}
-      {showPayment && order && (
+      {showPayment && hasOrders && (
         <div className="border-t overflow-y-auto max-h-[50vh]">
           {/* Remaining Total */}
           <div className="px-4 py-4 text-center border-b">
@@ -424,10 +463,10 @@ export default function CashierOrderPanel({
                 </div>
 
                 {/* Split by item */}
-                {advancedMode === 'split_item' && order && (
+                {advancedMode === 'split_item' && hasOrders && (
                   <div className="space-y-1">
                     <p className="text-[10px] font-bold text-muted-foreground uppercase">Ödenecek ürünleri seçin</p>
-                    {order.items.map(item => {
+                    {allOrderItems.map(item => {
                       const isPaid = item.paymentStatus === 'paid';
                       const itemTotal = (item.menuItem.price + item.modifiers.reduce((s, m) => s + m.extraPrice, 0)) * item.quantity;
                       return (
