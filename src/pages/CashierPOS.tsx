@@ -1,13 +1,19 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { usePOS } from '@/context/POSContext';
 import { useAuth } from '@/context/AuthContext';
-import { Table, Order, TABLE_STATUS_COLORS, TABLE_STATUS_BORDER_COLORS, TABLE_STATUS_LABELS } from '@/types/pos';
-import { ArrowLeft, LogOut, Clock, DollarSign } from 'lucide-react';
+import { OrderItem, Table, MenuItem, OrderItemModifier } from '@/types/pos';
+import { ArrowLeft, LogOut, Clock, DollarSign, AlertTriangle, ShoppingCart } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { formatAdisyon, printReceipt } from '@/lib/receipt';
 import { playSuccess } from '@/lib/sound';
 import { useIsMobile } from '@/hooks/use-mobile';
-import CashierPaymentPanel from '@/components/cashier/CashierPaymentPanel';
+
+import TableGrid from '@/components/waiter/TableGrid';
+import ProductGrid from '@/components/waiter/ProductGrid';
+import CategorySidebar from '@/components/waiter/CategorySidebar';
+import { BottomSheetModifiers } from '@/components/waiter/ModifierModal';
+import CashierOrderPanel from '@/components/cashier/CashierOrderPanel';
 
 function formatDuration(openedAt?: Date) {
   if (!openedAt) return '';
@@ -18,20 +24,35 @@ function formatDuration(openedAt?: Date) {
   return h > 0 ? `${h}s ${m}dk` : `${m}dk`;
 }
 
+type MobileTab = 'tables' | 'menu' | 'order';
+
 export default function CashierPOS() {
   const {
-    tables, orders, floors, restaurantName, completePayment,
-    recordPrepayment, payOrderItems, staffId, markOrderReady,
+    tables, categories, menuItems, addOrder, getTableOrders,
+    setTableTotal, openTable, modifierGroups, floors,
+    orders, restaurantName, productModifierMap, markOrderReady,
+    completePayment, recordPrepayment, payOrderItems, staffId,
   } = usePOS();
   const { session, logout } = useAuth();
   const staffName = session?.name || null;
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
+  // ─── State ──────────────────────────────────
+  const [selectedTable, setSelectedTable] = useState<Table | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState(categories[0]?.id || '');
   const [selectedFloor, setSelectedFloor] = useState(floors[0]);
-  const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const draftItemsRef = useRef<Map<string, OrderItem[]>>(new Map());
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  const [mobileModifierItem, setMobileModifierItem] = useState<MenuItem | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const [editNoteId, setEditNoteId] = useState<string | null>(null);
+  const [editNoteText, setEditNoteText] = useState('');
+  const [showSentWarning, setShowSentWarning] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [mobileStep, setMobileStep] = useState<'tables' | 'payment'>('tables');
+  const [mobileTab, setMobileTab] = useState<MobileTab>('tables');
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -39,61 +60,249 @@ export default function CashierPOS() {
     return () => clearInterval(interval);
   }, []);
 
-  // Derived state — always in sync with realtime data
-  const selectedTable = useMemo(() => {
-    if (!selectedTableId) return null;
-    return tables.find(t => t.id === selectedTableId) || null;
-  }, [tables, selectedTableId]);
-
-  const selectedOrder = useMemo(() => {
-    if (!selectedTableId) return null;
-    return orders.find(o => o.tableId === selectedTableId && o.status !== 'paid') || null;
-  }, [orders, selectedTableId]);
-
-  // Auto-deselect when table becomes available (payment completed via realtime)
+  // ─── Auto-deselect on payment completion ────
+  const currentTableInContext = selectedTable ? tables.find(t => t.id === selectedTable.id) : undefined;
+  const prevTableStatusRef = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (selectedTableId && selectedTable && selectedTable.status === 'available') {
-      setSelectedTableId(null);
-      if (isMobile) setMobileStep('tables');
+    const curr = currentTableInContext?.status;
+    const prev = prevTableStatusRef.current;
+    prevTableStatusRef.current = curr;
+    if (selectedTable && curr === 'available' && prev !== undefined && prev !== 'available') {
+      draftItemsRef.current.delete(selectedTable.id);
+      setSelectedTable(null);
+      setOrderItems([]);
+      if (isMobile) setMobileTab('tables');
+      toast.success(`${selectedTable.name} ödeme tamamlandı`);
     }
-  }, [selectedTable?.status, selectedTableId, isMobile]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTableInContext?.status]);
 
-  const floorTables = useMemo(
-    () => tables.filter(t => t.floor === selectedFloor),
-    [tables, selectedFloor]
+  // Clear stale drafts when tables become available
+  useEffect(() => {
+    for (const [tableId] of draftItemsRef.current) {
+      const t = tables.find(tb => tb.id === tableId);
+      if (!t || t.status === 'available') {
+        draftItemsRef.current.delete(tableId);
+      }
+    }
+  }, [tables]);
+
+  // ─── Draft management ──────────────────────
+  const saveDrafts = useCallback((tableId: string, items: OrderItem[]) => {
+    const unsent = items.filter(i => !(i as any)._fromDB);
+    if (unsent.length > 0) {
+      draftItemsRef.current.set(tableId, unsent);
+    } else {
+      draftItemsRef.current.delete(tableId);
+    }
+  }, []);
+
+  const leaveTable = useCallback(() => {
+    if (selectedTable) {
+      saveDrafts(selectedTable.id, orderItems);
+    }
+    setSelectedTable(null);
+    setOrderItems([]);
+    setExpandedItemId(null);
+    if (isMobile) setMobileTab('tables');
+  }, [selectedTable, orderItems, saveDrafts, isMobile]);
+
+  // ─── Table selection ───────────────────────
+  const handleSelectTable = useCallback((t: Table) => {
+    if (selectedTable) {
+      saveDrafts(selectedTable.id, orderItems);
+    }
+    setSelectedTable(t);
+    const existingOrders = getTableOrders(t.id);
+    const sentItems = existingOrders.length > 0
+      ? existingOrders.flatMap(o => o.items.map(i => ({ ...i, _fromDB: true } as any)))
+      : [];
+    const drafts = draftItemsRef.current.get(t.id) || [];
+    setOrderItems([...sentItems, ...drafts]);
+    if (isMobile) setMobileTab('menu');
+  }, [getTableOrders, isMobile, selectedTable, orderItems, saveDrafts]);
+
+  // ─── Computed values ───────────────────────
+  const total = useMemo(
+    () => orderItems.reduce((sum, i) => {
+      const modExtra = i.modifiers.reduce((s, m) => s + m.extraPrice, 0);
+      return sum + (i.menuItem.price + modExtra) * i.quantity;
+    }, 0),
+    [orderItems]
   );
 
-  // Desktop left panel: sorted by status priority then duration
-  const sortedFloorTables = useMemo(() => {
-    const statusOrder: Record<string, number> = { waiting_payment: 0, occupied: 1, available: 2 };
-    return [...floorTables].sort((a, b) => {
-      const sa = statusOrder[a.status] ?? 3;
-      const sb = statusOrder[b.status] ?? 3;
-      if (sa !== sb) return sa - sb;
-      const da = a.openedAt ? new Date(a.openedAt).getTime() : Infinity;
-      const db = b.openedAt ? new Date(b.openedAt).getTime() : Infinity;
-      return da - db;
-    });
-  }, [floorTables]);
+  const selectedOrder = useMemo(() => {
+    if (!selectedTable) return null;
+    return orders.find(o => o.tableId === selectedTable.id && o.status !== 'paid') || null;
+  }, [orders, selectedTable]);
 
-  const getTableOrder = useCallback((tableId: string): Order | null => {
-    return orders.find(o => o.tableId === tableId && o.status !== 'paid') || null;
-  }, [orders]);
+  const tableOrders = selectedTable ? orders.filter(o => o.tableId === selectedTable.id && o.status !== 'paid') : [];
+  const totalPaid = tableOrders.reduce((sum, o) => sum + (o.payments || []).reduce((s, p) => s + p.amount, 0), 0);
+  const totalPrepayment = tableOrders.reduce((sum, o) => (o.payments || []).filter(p => p.type === 'prepayment').reduce((s, p) => s + p.amount, sum), 0);
+  const remainingAmount = Math.max(0, total - totalPaid);
+  const newItemCount = orderItems.filter(i => !(i as any)._fromDB).length;
+  const hasActiveOrders = selectedTable ? orders.some(o => o.tableId === selectedTable.id && o.status === 'active') : false;
 
-  const handleTableTap = (table: Table) => {
-    const order = getTableOrder(table.id);
-    if (!order) {
-      if (table.status === 'available') {
-        toast.info('Bu masa boş');
-      } else {
-        toast.info('Bu masanın aktif siparişi yok');
-      }
+  // ─── Item management ───────────────────────
+  const handleItemTap = useCallback((item: MenuItem) => {
+    if (!selectedTable) {
+      toast.warning('Önce bir masa seçin');
       return;
     }
-    setSelectedTableId(table.id);
-    if (isMobile) setMobileStep('payment');
+    const linked = productModifierMap.get(item.id) || [];
+    if (linked.length > 0) {
+      if (isMobile) {
+        setMobileModifierItem(item);
+      } else {
+        setExpandedItemId(prev => prev === item.id ? null : item.id);
+      }
+    } else {
+      addItemDirect(item, [], '');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTable, productModifierMap, isMobile]);
+
+  const addItemDirect = (item: MenuItem, modifiers: OrderItemModifier[], note: string) => {
+    setOrderItems(prev => {
+      if (modifiers.length === 0 && !note) {
+        const existing = prev.find(i => i.menuItem.id === item.id && i.modifiers.length === 0 && !i.note && !(i as any)._fromDB);
+        if (existing) return prev.map(i => i.id === existing.id ? { ...i, quantity: i.quantity + 1 } : i);
+      }
+      return [...prev, { id: Date.now().toString(), menuItem: item, quantity: 1, modifiers, note: note || undefined }];
+    });
   };
 
+  const handleConfirmModifiers = (item: MenuItem, modifiers: OrderItemModifier[], note: string, quantity: number) => {
+    for (let i = 0; i < quantity; i++) {
+      addItemDirect(item, modifiers, note);
+    }
+    setExpandedItemId(null);
+    setMobileModifierItem(null);
+  };
+
+  const handleRemoveItem = (itemId: string) => {
+    const item = orderItems.find(i => i.id === itemId);
+    if ((item as any)?._fromDB) {
+      setShowSentWarning(itemId);
+    } else {
+      setOrderItems(prev => prev.filter(i => i.id !== itemId));
+    }
+  };
+
+  const confirmSentEdit = () => {
+    if (showSentWarning) {
+      setOrderItems(prev => prev.filter(i => i.id !== showSentWarning));
+      setShowSentWarning(null);
+      toast.info('Mutfağa bildirildi: Ürün değiştirildi');
+    }
+  };
+
+  const handleUpdateQty = (itemId: string, delta: number) => {
+    const item = orderItems.find(i => i.id === itemId);
+    if ((item as any)?._fromDB && delta < 0) {
+      setShowSentWarning(itemId);
+      return;
+    }
+    setOrderItems(prev => prev.map(i => {
+      if (i.id !== itemId) return i;
+      const newQty = i.quantity + delta;
+      return newQty <= 0 ? null! : { ...i, quantity: newQty };
+    }).filter(Boolean));
+  };
+
+  const handleEditNote = (itemId: string) => {
+    const item = orderItems.find(i => i.id === itemId);
+    setEditNoteId(editNoteId === itemId ? null : itemId);
+    setEditNoteText(item?.note || '');
+  };
+
+  const handleSaveNote = (itemId: string) => {
+    setOrderItems(prev => prev.map(i => i.id === itemId ? { ...i, note: editNoteText || undefined } : i));
+    setEditNoteId(null);
+    setEditNoteText('');
+  };
+
+  // ─── Kitchen & order actions ───────────────
+  const sendToKitchen = async () => {
+    if (!selectedTable || orderItems.length === 0) return;
+    const newItems = orderItems.filter(i => !(i as any)._fromDB);
+    if (newItems.length === 0) {
+      toast.info('Tüm ürünler zaten mutfağa gönderildi');
+      return;
+    }
+    const newItemsTotal = newItems.reduce((sum, i) => {
+      const modExtra = i.modifiers.reduce((s, m) => s + m.extraPrice, 0);
+      return sum + (i.menuItem.price + modExtra) * i.quantity;
+    }, 0);
+    const result = await addOrder({
+      id: Date.now().toString(),
+      tableId: selectedTable.id,
+      tableName: selectedTable.name,
+      items: newItems,
+      status: 'active',
+      createdAt: new Date(),
+      total: newItemsTotal,
+    });
+    if (!result.success) {
+      toast.error(`Sipariş gönderilemedi: ${result.error || 'Veritabanı hatası. Lütfen tekrar deneyin.'}`);
+      return;
+    }
+    openTable(selectedTable.id);
+    setTableTotal(selectedTable.id, total);
+    toast.success('Sipariş mutfağa gönderildi!');
+    playSuccess();
+    draftItemsRef.current.delete(selectedTable.id);
+    // Reload sent items from DB
+    const existingOrders = getTableOrders(selectedTable.id);
+    const sentItems = existingOrders.flatMap(o => o.items.map(i => ({ ...i, _fromDB: true } as any)));
+    setOrderItems(sentItems);
+  };
+
+  const clearOrder = () => {
+    const hasKitchenItems = orderItems.some(i => (i as any)._fromDB);
+    if (hasKitchenItems) {
+      setOrderItems(prev => prev.filter(i => (i as any)._fromDB));
+      toast.info('Gönderilmemiş ürünler temizlendi');
+    } else {
+      setOrderItems([]);
+    }
+    if (selectedTable) draftItemsRef.current.delete(selectedTable.id);
+  };
+
+  const printAdisyon = () => {
+    if (!selectedTable || orderItems.length === 0) return;
+    const items = orderItems.map(i => ({
+      name: i.menuItem.name,
+      qty: i.quantity,
+      unitPrice: i.menuItem.price + i.modifiers.reduce((s, m) => s + m.extraPrice, 0),
+    }));
+    printReceipt(
+      formatAdisyon({
+        restaurantName: restaurantName || 'RESTORAN',
+        tableName: selectedTable.name,
+        staffName: staffName || '',
+        date: new Date(),
+        items,
+        total,
+      }),
+      'Adisyon'
+    );
+  };
+
+  const handleMarkReady = async () => {
+    if (!selectedTable) return;
+    const activeOrders = orders.filter(o => o.tableId === selectedTable.id && o.status === 'active');
+    if (activeOrders.length === 0) {
+      toast.info('Hazır işaretlenecek aktif sipariş yok');
+      return;
+    }
+    for (const o of activeOrders) {
+      await markOrderReady(o.id);
+    }
+    toast.success('Sipariş hazır — ödeme bekleniyor');
+  };
+
+  // ─── Payment handlers ─────────────────────
   const handleCompletePayment = async (amount: number, method: string, discountAmount?: number, discountReason?: string) => {
     if (!selectedOrder || isSubmitting) return;
     setIsSubmitting(true);
@@ -135,182 +344,261 @@ export default function CashierPOS() {
     }
   };
 
-  const handleMarkReady = async () => {
-    if (!selectedTableId) return;
-    const activeOrders = orders.filter(o => o.tableId === selectedTableId && o.status === 'active');
-    for (const o of activeOrders) {
-      await markOrderReady(o.id);
-    }
-    toast.success('Sipariş hazır — ödeme bekleniyor');
+  const handleSelectCategory = (catId: string) => {
+    setSelectedCategory(catId);
+    setShowSearch(false);
+    setSearchQuery('');
+    setExpandedItemId(null);
   };
 
-  const waitingPaymentCount = tables.filter(t => t.status === 'waiting_payment').length;
   const navigateOut = () => { logout(); navigate(`/pos/${session?.type === 'staff' ? session.slug : ''}`); };
 
-  // ─── Shared table grid renderer ────────────
-
-  const renderTableGrid = (gridCols: string) => (
-    <div className={`grid ${gridCols} gap-3 flex-1 content-start overflow-y-auto`}>
-      {sortedFloorTables.map(t => {
-        const order = getTableOrder(t.id);
-        const hasOrder = !!order;
-        const allPayments = order?.payments || [];
-        const totalPaid = allPayments.reduce((s, p) => s + p.amount, 0);
-        const remaining = order ? Math.max(0, order.total - totalPaid) : 0;
-        const hasAnyPayment = totalPaid > 0;
-        return (
-          <button
-            key={t.id}
-            onClick={() => handleTableTap(t)}
-            className={`flex flex-col items-center justify-center p-4 rounded-lg border min-h-[100px] ${TABLE_STATUS_COLORS[t.status]} ${TABLE_STATUS_BORDER_COLORS[t.status]} pos-btn transition-all ${!hasOrder ? 'opacity-50' : ''}`}
-          >
-            <span className="text-2xl font-bold">{t.name.replace('Masa ', '')}</span>
-            <span className="text-xs opacity-60">{t.name}</span>
-            {order && (hasAnyPayment ? (
-              <>
-                <span className="text-[10px] opacity-60 line-through mt-1">{order.total} TL</span>
-                <span className="text-sm font-bold">{remaining} TL kalan</span>
-              </>
-            ) : (
-              <span className="text-sm font-bold mt-1">{order.total} TL</span>
-            ))}
-            <span className="text-[10px] font-bold mt-1">{TABLE_STATUS_LABELS[t.status]}</span>
-            {t.openedAt && t.status !== 'available' && (
-              <span className="flex items-center gap-0.5 text-[10px] opacity-60 mt-0.5"><Clock className="w-3 h-3" /> {formatDuration(t.openedAt)}</span>
-            )}
-          </button>
-        );
-      })}
-    </div>
-  );
+  // ─── Shared order panel props ──────────────
+  const orderPanelProps = {
+    selectedTable,
+    orderItems,
+    total,
+    totalPaid,
+    totalPrepayment,
+    remainingAmount,
+    editNoteId,
+    editNoteText,
+    onUpdateQty: handleUpdateQty,
+    onRemoveItem: handleRemoveItem,
+    onEditNote: handleEditNote,
+    onSaveNote: handleSaveNote,
+    onEditNoteTextChange: setEditNoteText,
+    onSendToKitchen: sendToKitchen,
+    onClearOrder: clearOrder,
+    onPrintAdisyon: printAdisyon,
+    onMarkReady: handleMarkReady,
+    hasActiveOrders,
+    order: selectedOrder,
+    restaurantName,
+    staffName: staffName || '',
+    onCompletePayment: handleCompletePayment,
+    onPrepayment: handlePrepayment,
+    onPayOrderItems: handlePayOrderItems,
+    isSubmitting,
+  };
 
   // ─── Mobile Layout ─────────────────────────
 
   if (isMobile) {
     return (
-      <div className="h-screen flex flex-col bg-background">
-        <header className="flex items-center gap-2 px-4 py-3 bg-card border-b shrink-0">
-          {mobileStep === 'payment' ? (
-            <button onClick={() => { setMobileStep('tables'); setSelectedTableId(null); }} className="p-2 rounded-md hover:bg-muted pos-btn">
-              <ArrowLeft className="w-5 h-5" />
+      <div className="h-screen flex flex-col overflow-hidden bg-background">
+        <header className="flex items-center gap-2 px-3 py-2 bg-card border-b shrink-0">
+          {mobileTab === 'tables' ? (
+            <button onClick={navigateOut} className="p-2 rounded-md hover:bg-muted pos-btn">
+              <LogOut className="w-5 h-5" />
             </button>
           ) : (
-            <button onClick={navigateOut} className="p-2 rounded-md hover:bg-muted pos-btn">
+            <button onClick={() => {
+              if (mobileTab === 'order') { setMobileTab('menu'); }
+              else { leaveTable(); }
+            }} className="p-2 rounded-md hover:bg-muted pos-btn">
               <ArrowLeft className="w-5 h-5" />
             </button>
           )}
           <DollarSign className="w-5 h-5 text-primary" />
-          <h1 className="text-lg font-bold">
-            {mobileStep === 'payment' && selectedTable ? selectedTable.name : 'Kasa POS'}
+          <h1 className="text-base font-bold truncate">
+            {mobileTab === 'tables' ? 'Kasa POS' : mobileTab === 'menu' ? 'Menü' : 'Sipariş'}
           </h1>
-          {staffName && <span className="text-xs text-muted-foreground font-medium ml-1">({staffName})</span>}
-          {waitingPaymentCount > 0 && mobileStep === 'tables' && (
-            <span className="ml-auto px-2 py-1 rounded-md bg-pos-warning text-pos-warning-foreground text-xs font-bold">
-              {waitingPaymentCount} bekliyor
-            </span>
+          {staffName && <span className="text-xs text-muted-foreground font-medium">({staffName})</span>}
+          {selectedTable && (
+            <div className="ml-auto flex items-center gap-1.5">
+              {selectedTable.openedAt && (
+                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground text-[10px] font-medium">
+                  <Clock className="w-3 h-3" /> {formatDuration(selectedTable.openedAt)}
+                </span>
+              )}
+              <span className="px-2 py-1 rounded-md bg-primary/10 text-primary font-bold text-xs">{selectedTable.name}</span>
+            </div>
           )}
-          <button onClick={navigateOut} className="ml-auto p-2 rounded-md hover:bg-muted pos-btn" title="Çıkış">
-            <LogOut className="w-4 h-4" />
-          </button>
         </header>
 
-        {mobileStep === 'tables' && (
-          <div className="flex-1 flex flex-col p-3 overflow-hidden">
-            <div className="flex gap-2 mb-3 shrink-0">
-              {floors.map(f => (
-                <button key={f} onClick={() => setSelectedFloor(f)} className={`px-4 py-2 rounded-md text-sm font-bold pos-btn ${selectedFloor === f ? 'bg-primary text-primary-foreground' : 'bg-card border hover:bg-muted'}`}>{f}</button>
-              ))}
+        <div className="flex-1 min-h-0 flex flex-col">
+          {mobileTab === 'tables' && (
+            <TableGrid
+              tables={tables}
+              orders={orders}
+              floors={floors}
+              selectedFloor={selectedFloor}
+              onSelectFloor={setSelectedFloor}
+              onSelectTable={handleSelectTable}
+            />
+          )}
+
+          {mobileTab === 'menu' && selectedTable && (
+            <>
+              <CategorySidebar
+                categories={categories}
+                selectedCategory={selectedCategory}
+                showSearch={showSearch}
+                onSelectCategory={handleSelectCategory}
+                horizontal
+              />
+              <ProductGrid
+                menuItems={menuItems}
+                selectedCategory={selectedCategory}
+                showSearch={showSearch}
+                searchQuery={searchQuery}
+                onToggleSearch={() => { setShowSearch(!showSearch); setSearchQuery(''); }}
+                onSearchChange={setSearchQuery}
+                onItemTap={handleItemTap}
+                hideBackButton
+              />
+            </>
+          )}
+
+          {mobileTab === 'order' && (
+            <CashierOrderPanel {...orderPanelProps} fullWidth />
+          )}
+        </div>
+
+        {/* Bottom order banner — menu step only */}
+        {mobileTab === 'menu' && selectedTable && (
+          <div
+            onClick={() => setMobileTab('order')}
+            className="shrink-0 border-t bg-primary text-primary-foreground px-4 py-3.5 flex items-center justify-between cursor-pointer active:opacity-90 touch-manipulation"
+          >
+            <div className="flex items-center gap-2">
+              <ShoppingCart className="w-5 h-5" />
+              <span className="font-bold">
+                {newItemCount > 0 ? `${newItemCount} ürün · ${total} ₺` : 'Sipariş'}
+              </span>
             </div>
-            {renderTableGrid('grid-cols-3')}
+            <span className="text-sm font-semibold">Sipariş →</span>
           </div>
         )}
 
-        {mobileStep === 'payment' && selectedOrder && selectedTable && (
-          <CashierPaymentPanel
-            order={selectedOrder}
-            tableName={selectedTable.name}
-            restaurantName={restaurantName}
-            staffName={staffName || ''}
-            onCompletePayment={handleCompletePayment}
-            onPrepayment={handlePrepayment}
-            onPayOrderItems={handlePayOrderItems}
-            onMarkReady={handleMarkReady}
-            isSubmitting={isSubmitting}
+        {/* Mobile Bottom Sheet Modifiers */}
+        {mobileModifierItem && (
+          <BottomSheetModifiers
+            item={mobileModifierItem}
+            modifierGroups={modifierGroups}
+            productModifierMap={productModifierMap}
+            onConfirm={(mods, note, qty) => handleConfirmModifiers(mobileModifierItem, mods, note, qty)}
+            onCancel={() => setMobileModifierItem(null)}
           />
+        )}
+
+        {/* Sent Item Warning */}
+        {showSentWarning && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 animate-fade-in" onClick={() => setShowSentWarning(null)}>
+            <div className="bg-card rounded-lg w-full max-w-sm mx-4 shadow-lg animate-slide-up overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="p-5 text-center">
+                <AlertTriangle className="w-12 h-12 text-pos-warning mx-auto mb-3" />
+                <h3 className="text-lg font-bold mb-2">Dikkat!</h3>
+                <p className="text-sm text-muted-foreground">Bu ürün mutfağa gönderildi. Değiştirmek istediğinize emin misiniz?</p>
+              </div>
+              <div className="p-4 border-t flex gap-2">
+                <button onClick={() => setShowSentWarning(null)} className="flex-1 py-3 rounded-md bg-muted font-semibold text-sm pos-btn">İptal</button>
+                <button onClick={confirmSentEdit} className="flex-1 py-3 rounded-md bg-pos-danger text-pos-danger-foreground font-bold text-sm pos-btn">Evet, Değiştir</button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     );
   }
 
-  // ─── Desktop Layout — Two-State ────────────
+  // ─── Desktop 3-Column Layout ───────────────
 
   return (
-    <div className="h-screen flex flex-col bg-background">
-      <header className="flex items-center gap-2 px-4 py-3 bg-card border-b shrink-0">
-        {selectedTableId ? (
-          <button onClick={() => setSelectedTableId(null)} className="p-2 rounded-md hover:bg-muted pos-btn">
-            <ArrowLeft className="w-5 h-5" />
+    <div className="h-screen flex flex-col overflow-hidden bg-background">
+      <header className="flex items-center gap-2 px-3 py-2 bg-card border-b shrink-0">
+        {selectedTable ? (
+          <button onClick={leaveTable} className="flex items-center gap-1.5 p-2 rounded-md hover:bg-muted pos-btn text-sm font-semibold">
+            <ArrowLeft className="w-5 h-5" /> Masalar
           </button>
         ) : (
           <button onClick={navigateOut} className="p-2 rounded-md hover:bg-muted pos-btn">
             <ArrowLeft className="w-5 h-5" />
           </button>
         )}
-        <DollarSign className="w-6 h-6 text-primary" />
-        <h1 className="text-xl font-bold">Kasa POS</h1>
+        <DollarSign className="w-5 h-5 text-primary" />
+        <h1 className="text-lg font-bold">Kasa POS</h1>
         {staffName && <span className="text-xs text-muted-foreground font-medium ml-1">({staffName})</span>}
         {selectedTable && (
-          <span className="ml-2 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-sm font-bold flex items-center gap-1.5">
-            {selectedTable.name}
-            {selectedTable.openedAt && selectedTable.status !== 'available' && (
-              <span className="flex items-center gap-0.5 text-xs opacity-70"><Clock className="w-3 h-3" /> {formatDuration(selectedTable.openedAt)}</span>
+          <div className="ml-auto flex items-center gap-2">
+            {selectedTable.openedAt && (
+              <span className="flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-muted-foreground text-xs font-medium">
+                <Clock className="w-3 h-3" /> {formatDuration(selectedTable.openedAt)}
+              </span>
             )}
-          </span>
-        )}
-        {waitingPaymentCount > 0 && !selectedTableId && (
-          <span className="ml-2 px-3 py-1 rounded-md bg-pos-warning text-pos-warning-foreground text-sm font-bold">
-            {waitingPaymentCount} ödeme bekliyor
-          </span>
+            <span className="px-3 py-1 rounded-md bg-primary/10 text-primary font-bold text-sm">{selectedTable.name}</span>
+          </div>
         )}
         <button onClick={navigateOut} className="ml-auto p-2 rounded-md hover:bg-muted pos-btn" title="Çıkış">
           <LogOut className="w-4 h-4" />
         </button>
       </header>
 
-      {/* State 1: Full-screen tables */}
-      {!selectedTableId ? (
-        <div className="flex-1 flex flex-col p-4 overflow-hidden">
-          <div className="flex gap-2 mb-4 shrink-0">
-            {floors.map(f => (
-              <button key={f} onClick={() => setSelectedFloor(f)} className={`px-5 py-2.5 rounded-md text-sm font-bold pos-btn ${selectedFloor === f ? 'bg-primary text-primary-foreground' : 'bg-card border hover:bg-muted'}`}>{f}</button>
-            ))}
+      {/* State 1: No table selected — full-screen table grid */}
+      {!selectedTable && (
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <TableGrid
+            tables={tables}
+            orders={orders}
+            floors={floors}
+            selectedFloor={selectedFloor}
+            onSelectFloor={setSelectedFloor}
+            onSelectTable={handleSelectTable}
+            fullscreen
+          />
+        </div>
+      )}
+
+      {/* State 2: Table selected — 3-column layout */}
+      {selectedTable && (
+        <div className="flex flex-1 min-h-0">
+          {/* LEFT: Categories + Products — flex-1 */}
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <CategorySidebar
+              categories={categories}
+              selectedCategory={selectedCategory}
+              showSearch={showSearch}
+              onSelectCategory={handleSelectCategory}
+              horizontal
+            />
+            <ProductGrid
+              menuItems={menuItems}
+              selectedCategory={selectedCategory}
+              showSearch={showSearch}
+              searchQuery={searchQuery}
+              onToggleSearch={() => { setShowSearch(!showSearch); setSearchQuery(''); }}
+              onSearchChange={setSearchQuery}
+              onItemTap={handleItemTap}
+              hideBackButton
+              expandedItemId={expandedItemId}
+              modifierGroups={modifierGroups}
+              productModifierMap={productModifierMap}
+              onConfirmModifiers={handleConfirmModifiers}
+              onCancelModifiers={() => setExpandedItemId(null)}
+            />
           </div>
-          {renderTableGrid('grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6')}
-          <div className="flex gap-4 mt-3 justify-center text-xs text-muted-foreground shrink-0">
-            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-gray-200 border border-gray-300" /> Boş</span>
-            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-100 border border-red-300" /> Dolu</span>
-            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-amber-100 border border-amber-300" /> Ödeme Bekliyor</span>
+
+          {/* RIGHT: Order Panel — w-96 */}
+          <div className="w-96 shrink-0 border-l flex flex-col min-h-0 overflow-hidden">
+            <CashierOrderPanel {...orderPanelProps} />
           </div>
         </div>
-      ) : selectedOrder && selectedTable ? (
-        /* State 2: Full-screen payment */
-        <CashierPaymentPanel
-          order={selectedOrder}
-          tableName={selectedTable.name}
-          restaurantName={restaurantName}
-          staffName={staffName || ''}
-          onCompletePayment={handleCompletePayment}
-          onPrepayment={handlePrepayment}
-          onPayOrderItems={handlePayOrderItems}
-          onMarkReady={handleMarkReady}
-          isSubmitting={isSubmitting}
-        />
-      ) : (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center text-muted-foreground">
-            <DollarSign className="w-16 h-16 mx-auto mb-4 opacity-20" />
-            <p className="text-lg font-semibold">Sipariş bulunamadı</p>
-            <button onClick={() => setSelectedTableId(null)} className="mt-3 px-4 py-2 rounded-md bg-primary text-primary-foreground font-bold text-sm pos-btn">← Masalara Dön</button>
+      )}
+
+      {/* Sent Item Warning */}
+      {showSentWarning && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 animate-fade-in" onClick={() => setShowSentWarning(null)}>
+          <div className="bg-card rounded-lg w-full max-w-sm mx-4 shadow-lg animate-slide-up overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-5 text-center">
+              <AlertTriangle className="w-12 h-12 text-pos-warning mx-auto mb-3" />
+              <h3 className="text-lg font-bold mb-2">Dikkat!</h3>
+              <p className="text-sm text-muted-foreground">Bu ürün mutfağa gönderildi. Değiştirmek istediğinize emin misiniz?</p>
+            </div>
+            <div className="p-4 border-t flex gap-2">
+              <button onClick={() => setShowSentWarning(null)} className="flex-1 py-3 rounded-md bg-muted font-semibold text-sm pos-btn">İptal</button>
+              <button onClick={confirmSentEdit} className="flex-1 py-3 rounded-md bg-pos-danger text-pos-danger-foreground font-bold text-sm pos-btn">Evet, Değiştir</button>
+            </div>
           </div>
         </div>
       )}
