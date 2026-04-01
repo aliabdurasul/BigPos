@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { usePOS } from '@/context/POSContext';
 import { useAuth } from '@/context/AuthContext';
 import { OrderItem, Table, MenuItem, OrderItemModifier } from '@/types/pos';
-import { ArrowLeft, LogOut, Clock, DollarSign, AlertTriangle, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, LogOut, Clock, AlertTriangle, ShoppingCart, Banknote, CreditCard, X, Plus, Minus, MessageSquare, Send, CheckCircle, Gift } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { formatAdisyon, printReceipt } from '@/lib/receipt';
@@ -54,6 +54,10 @@ export default function CashierPOS() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mobileTab, setMobileTab] = useState<MobileTab>('tables');
   const [, setTick] = useState(0);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [ikramItems, setIkramItems] = useState<Set<string>>(new Set());
+  const [showCashInput, setShowCashInput] = useState(false);
+  const [cashInputAmount, setCashInputAmount] = useState('');
 
   useEffect(() => {
     const interval = setInterval(() => setTick(t => t + 1), 15000);
@@ -76,6 +80,14 @@ export default function CashierPOS() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTableInContext?.status]);
+
+  // Reset per-table state on table change
+  useEffect(() => {
+    setSelectedItemId(null);
+    setIkramItems(new Set());
+    setShowCashInput(false);
+    setCashInputAmount('');
+  }, [selectedTable?.id]);
 
   // Clear stale drafts when tables become available
   useEffect(() => {
@@ -134,7 +146,15 @@ export default function CashierPOS() {
   const tableOrders = selectedTable ? orders.filter(o => o.tableId === selectedTable.id && o.status !== 'paid') : [];
   const totalPaid = tableOrders.reduce((sum, o) => sum + (o.payments || []).reduce((s, p) => s + p.amount, 0), 0);
   const totalPrepayment = tableOrders.reduce((sum, o) => (o.payments || []).filter(p => p.type === 'prepayment').reduce((s, p) => s + p.amount, sum), 0);
-  const remainingAmount = Math.max(0, total - totalPaid);
+  const ikramDeduction = useMemo(
+    () => orderItems.filter(i => ikramItems.has(i.id)).reduce((sum, i) => {
+      const ext = i.modifiers.reduce((s, m) => s + m.extraPrice, 0);
+      return sum + (i.menuItem.price + ext) * i.quantity;
+    }, 0),
+    [orderItems, ikramItems]
+  );
+  const effectiveTotal = total - ikramDeduction;
+  const remainingAmount = Math.max(0, effectiveTotal - totalPaid);
   const newItemCount = orderItems.filter(i => !(i as any)._fromDB).length;
   const hasActiveOrders = selectedTable ? orders.some(o => o.tableId === selectedTable.id && o.status === 'active') : false;
 
@@ -365,6 +385,71 @@ export default function CashierPOS() {
     }
   };
 
+  // ─── Ikram & inline payment handlers ───────
+  const handleToggleIkram = () => {
+    if (!selectedItemId) return;
+    setIkramItems(prev => {
+      const next = new Set(prev);
+      next.has(selectedItemId) ? next.delete(selectedItemId) : next.add(selectedItemId);
+      return next;
+    });
+  };
+
+  const handleCashPay = async () => {
+    const amount = Number(cashInputAmount);
+    if (amount <= 0 || !tableOrders.length) return;
+    const targetOrder = tableOrders.find(o => o.status === 'ready') || tableOrders[0];
+    if (!targetOrder || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await completePayment(targetOrder.id, Math.min(amount, remainingAmount), 'nakit', staffId || undefined, ikramDeduction > 0 ? ikramDeduction : undefined, ikramDeduction > 0 ? 'İkram' : undefined);
+      setCashInputAmount('');
+      setShowCashInput(false);
+      playSuccess();
+      toast.success(`${amount} ₺ nakit alındı`);
+    } catch {
+      toast.error('Ödeme başarısız');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCardPay = async () => {
+    const targetOrder = tableOrders.find(o => o.status === 'ready') || tableOrders[0];
+    if (!targetOrder || isSubmitting || remainingAmount <= 0) return;
+    setIsSubmitting(true);
+    try {
+      await completePayment(targetOrder.id, remainingAmount, 'kredi_karti', staffId || undefined, ikramDeduction > 0 ? ikramDeduction : undefined, ikramDeduction > 0 ? 'İkram' : undefined);
+      playSuccess();
+      toast.success(`${remainingAmount} ₺ kart ile ödendi`);
+    } catch {
+      toast.error('Ödeme başarısız');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleKapatHesap = async () => {
+    if (!tableOrders.length || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      for (const order of tableOrders) {
+        if (order.status !== 'paid') {
+          const orderRemaining = Math.max(0, order.total - (order.payments || []).reduce((s, p) => s + p.amount, 0));
+          if (orderRemaining > 0) {
+            await completePayment(order.id, orderRemaining, 'nakit', staffId || undefined);
+          }
+        }
+      }
+      playSuccess();
+      toast.success('Hesap kapatıldı');
+    } catch {
+      toast.error('Hesap kapatılamadı');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSelectCategory = (catId: string) => {
     setSelectedCategory(catId);
     setShowSearch(false);
@@ -380,27 +465,16 @@ export default function CashierPOS() {
     orderItems,
     total,
     totalPaid,
-    totalPrepayment,
     remainingAmount,
+    ikramItems,
     editNoteId,
     editNoteText,
-    onUpdateQty: handleUpdateQty,
-    onRemoveItem: handleRemoveItem,
+    selectedItemId,
+    onSelectItem: setSelectedItemId,
     onEditNote: handleEditNote,
     onSaveNote: handleSaveNote,
     onEditNoteTextChange: setEditNoteText,
-    onSendToKitchen: sendToKitchen,
-    onClearOrder: clearOrder,
     onPrintAdisyon: printAdisyon,
-    onMarkReady: handleMarkReady,
-    hasActiveOrders,
-    tableOrders,
-    restaurantName,
-    staffName: staffName || '',
-    onCompletePayment: handleCompletePayment,
-    onPrepayment: handlePrepayment,
-    onPayOrderItems: handlePayOrderItems,
-    isSubmitting,
   };
 
   // ─── Mobile Layout ─────────────────────────
@@ -421,7 +495,7 @@ export default function CashierPOS() {
               <ArrowLeft className="w-5 h-5" />
             </button>
           )}
-          <DollarSign className="w-5 h-5 text-primary" />
+          <ShoppingCart className="w-5 h-5 text-primary" />
           <h1 className="text-base font-bold truncate">
             {mobileTab === 'tables' ? 'Kasa POS' : mobileTab === 'menu' ? 'Menü' : 'Sipariş'}
           </h1>
@@ -538,7 +612,7 @@ export default function CashierPOS() {
             <ArrowLeft className="w-5 h-5" />
           </button>
         )}
-        <DollarSign className="w-5 h-5 text-primary" />
+        <Banknote className="w-5 h-5 text-primary" />
         <h1 className="text-lg font-bold">Kasa POS</h1>
         {staffName && <span className="text-xs text-muted-foreground font-medium ml-1">({staffName})</span>}
         {selectedTable && (
@@ -571,38 +645,157 @@ export default function CashierPOS() {
         </div>
       )}
 
-      {/* State 2: Table selected — 3-column layout */}
+      {/* State 2: Table selected — sticky top bar + split layout */}
       {selectedTable && (
-        <div className="flex flex-1 min-h-0">
-          {/* LEFT: Categories + Products — flex-1 */}
-          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            <CategorySidebar
-              categories={categories}
-              selectedCategory={selectedCategory}
-              showSearch={showSearch}
-              onSelectCategory={handleSelectCategory}
-              horizontal
-            />
-            <ProductGrid
-              menuItems={menuItems}
-              selectedCategory={selectedCategory}
-              showSearch={showSearch}
-              searchQuery={searchQuery}
-              onToggleSearch={() => { setShowSearch(!showSearch); setSearchQuery(''); }}
-              onSearchChange={setSearchQuery}
-              onItemTap={handleItemTap}
-              hideBackButton
-              expandedItemId={expandedItemId}
-              modifierGroups={modifierGroups}
-              productModifierMap={productModifierMap}
-              onConfirmModifiers={handleConfirmModifiers}
-              onCancelModifiers={() => setExpandedItemId(null)}
-            />
+        <div className="flex flex-col flex-1 min-h-0">
+          {/* ─── Sticky Payment Top Bar ──────────────────── */}
+          <div className="shrink-0 bg-card border-b px-3 py-2 flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 mr-auto">
+              {tableOrders.length > 0 && (
+                <span className="text-sm font-bold">
+                  Kalan: <span className="text-primary">{remainingAmount} ₺</span>
+                </span>
+              )}
+              {ikramDeduction > 0 && (
+                <span className="text-xs text-amber-600 font-semibold flex items-center gap-1">
+                  <Gift className="w-3 h-3" /> İkram: -{ikramDeduction} ₺
+                </span>
+              )}
+            </div>
+            <button
+              onClick={() => { setShowCashInput(v => !v); }}
+              disabled={!tableOrders.length || remainingAmount <= 0}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white font-bold text-sm pos-btn disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Banknote className="w-4 h-4" /> NAKİT
+            </button>
+            <button
+              onClick={handleCardPay}
+              disabled={isSubmitting || !tableOrders.length || remainingAmount <= 0}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm pos-btn disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <CreditCard className="w-4 h-4" /> KART
+            </button>
+            <button
+              onClick={handleKapatHesap}
+              disabled={isSubmitting || !tableOrders.length}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-destructive hover:bg-destructive/90 text-destructive-foreground font-bold text-sm pos-btn disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <X className="w-4 h-4" /> HESAP KAPAT
+            </button>
           </div>
 
-          {/* RIGHT: Order Panel — w-96 */}
-          <div className="w-96 shrink-0 border-l flex flex-col min-h-0 overflow-hidden">
-            <CashierOrderPanel {...orderPanelProps} />
+          {/* Inline cash input row */}
+          {showCashInput && (
+            <div className="shrink-0 bg-muted/50 border-b px-3 py-2 flex items-center gap-2">
+              <span className="text-xs font-semibold text-muted-foreground">Nakit tutar:</span>
+              <input
+                autoFocus
+                type="number"
+                value={cashInputAmount}
+                onChange={e => setCashInputAmount(e.target.value)}
+                placeholder={`${remainingAmount} ₺`}
+                className="w-28 px-2 py-1.5 rounded-lg border bg-card text-sm"
+                onKeyDown={e => e.key === 'Enter' && handleCashPay()}
+              />
+              <button
+                onClick={handleCashPay}
+                disabled={isSubmitting || !cashInputAmount || Number(cashInputAmount) <= 0}
+                className="px-3 py-1.5 rounded-lg bg-green-600 text-white font-bold text-sm pos-btn disabled:opacity-40"
+              >
+                Onayla
+              </button>
+              <button onClick={() => { setShowCashInput(false); setCashInputAmount(''); }} className="px-2 py-1.5 rounded-lg bg-muted text-muted-foreground font-semibold text-sm pos-btn">
+                İptal
+              </button>
+            </div>
+          )}
+
+          {/* Split: Left order panel (35%) + Right products (65%) */}
+          <div className="flex flex-1 min-h-0">
+            {/* LEFT: Order Panel */}
+            <div className="w-[35%] shrink-0 border-r flex flex-col min-h-0 overflow-hidden">
+              <CashierOrderPanel {...orderPanelProps} />
+
+              {/* ─── Bottom Action Bar ──────────────────── */}
+              <div className="shrink-0 border-t p-2 space-y-1.5">
+                {selectedItemId && (
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() => handleUpdateQty(selectedItemId, -1)}
+                      className="flex-1 py-2 rounded-lg bg-muted flex items-center justify-center gap-1 font-bold text-sm pos-btn"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleUpdateQty(selectedItemId, 1)}
+                      className="flex-1 py-2 rounded-lg bg-muted flex items-center justify-center gap-1 font-bold text-sm pos-btn"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={handleToggleIkram}
+                      className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-1 font-bold text-sm pos-btn ${
+                        ikramItems.has(selectedItemId)
+                          ? 'bg-amber-100 text-amber-700 border border-amber-300'
+                          : 'bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      <Gift className="w-4 h-4" /> İkram
+                    </button>
+                    <button
+                      onClick={() => handleRemoveItem(selectedItemId)}
+                      className="flex-1 py-2 rounded-lg bg-destructive/10 text-destructive flex items-center justify-center gap-1 font-bold text-sm pos-btn"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+                {newItemCount > 0 && (
+                  <button
+                    onClick={sendToKitchen}
+                    disabled={!selectedTable || orderItems.length === 0}
+                    className="w-full py-2.5 rounded-md bg-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 pos-btn disabled:opacity-40"
+                  >
+                    <Send className="w-4 h-4" /> Mutfağa Gönder ({newItemCount})
+                  </button>
+                )}
+                {hasActiveOrders && (
+                  <button
+                    onClick={handleMarkReady}
+                    className="w-full py-2 rounded-md bg-pos-warning text-pos-warning-foreground font-bold text-sm flex items-center justify-center gap-2 pos-btn"
+                  >
+                    <CheckCircle className="w-4 h-4" /> Sipariş Hazır
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* RIGHT: Categories + Products */}
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+              <CategorySidebar
+                categories={categories}
+                selectedCategory={selectedCategory}
+                showSearch={showSearch}
+                onSelectCategory={handleSelectCategory}
+                horizontal
+              />
+              <ProductGrid
+                menuItems={menuItems}
+                selectedCategory={selectedCategory}
+                showSearch={showSearch}
+                searchQuery={searchQuery}
+                onToggleSearch={() => { setShowSearch(!showSearch); setSearchQuery(''); }}
+                onSearchChange={setSearchQuery}
+                onItemTap={handleItemTap}
+                hideBackButton
+                expandedItemId={expandedItemId}
+                modifierGroups={modifierGroups}
+                productModifierMap={productModifierMap}
+                onConfirmModifiers={handleConfirmModifiers}
+                onCancelModifiers={() => setExpandedItemId(null)}
+              />
+            </div>
           </div>
         </div>
       )}
