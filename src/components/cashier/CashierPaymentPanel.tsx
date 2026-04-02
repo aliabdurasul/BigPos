@@ -1,12 +1,11 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Order } from '@/types/pos';
 import {
-  Banknote, CreditCard, ChevronDown, ChevronUp, Percent, Tag,
-  RotateCcw, CheckCircle2, AlertCircle, Clock,
+  Banknote, CreditCard, Check, Printer, ChevronDown, ChevronUp,
+  SplitSquareHorizontal, Users, Landmark, Percent,
 } from 'lucide-react';
 
-// ─── Action Log ────────────────────────────────
-
+// Keep this export so CashierPOS import doesn't break
 export interface ActionLogEntry {
   id: string;
   ts: Date;
@@ -14,155 +13,120 @@ export interface ActionLogEntry {
   type: 'payment' | 'refund' | 'void' | 'return' | 'discount' | 'info';
 }
 
-// ─── Props ─────────────────────────────────────
-
 interface CashierPaymentPanelProps {
-  /**  All active (unpaid) orders for the selected table */
   tableOrders: Order[];
+  tableName: string;
+  restaurantName: string;
+  staffName: string;
   isSubmitting: boolean;
-  /** Full payment for the whole table */
-  onCompletePayment: (amount: number, method: string, discountAmount?: number, discountReason?: string) => Promise<void>;
-  /** Refund a given amount back to customer */
-  onRefund: (amount: number, method: string) => Promise<void>;
-  /** Order-level discount (updates effective total) */
-  onOrderDiscount: (amount: number, reason: string) => void;
+  onCompletePayment: (amount: number, method: string, discountAmount?: number, discountReason?: string) => void;
+  onPrepayment: (amount: number, method: string) => void;
+  onPayOrderItems?: (itemIds: string[], amount: number, method: string, discountAmount?: number, discountReason?: string) => void;
+  onMarkReady?: () => void;
   onPrintAdisyon: () => void;
-  actionLog: ActionLogEntry[];
 }
-
-// ─── Helpers ───────────────────────────────────
-
-function fmt(n: number) {
-  return n.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-const QUICK_AMOUNTS = [50, 100, 200, 500];
-
-// ─── Component ─────────────────────────────────
 
 export default function CashierPaymentPanel({
-  tableOrders,
-  isSubmitting,
-  onCompletePayment,
-  onRefund,
-  onOrderDiscount,
-  onPrintAdisyon,
-  actionLog,
+  tableOrders, tableName, restaurantName, staffName,
+  onCompletePayment, onPrepayment, onPayOrderItems, onMarkReady,
+  onPrintAdisyon, isSubmitting,
 }: CashierPaymentPanelProps) {
-  // ─── Payment method ────────────────────────
-  const [method, setMethod] = useState<'nakit' | 'kredi_karti'>('nakit');
-  const [amountInput, setAmountInput] = useState('');
-
-  // Cash-received + change calculation (nakit only)
-  const [receivedInput, setReceivedInput] = useState('');
-
-  // Discount
+  const [paymentMethod, setPaymentMethod] = useState<'nakit' | 'kredi_karti'>('nakit');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [advancedMode, setAdvancedMode] = useState<'normal' | 'split_item' | 'split_person' | 'prepayment'>('normal');
+  const [selectedPayItems, setSelectedPayItems] = useState<Set<string>>(new Set());
+  const [splitPersonCount, setSplitPersonCount] = useState(2);
   const [showDiscount, setShowDiscount] = useState(false);
-  const [discountType, setDiscountType] = useState<'percent' | 'fixed'>('percent');
+  const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
   const [discountValue, setDiscountValue] = useState('');
   const [discountReason, setDiscountReason] = useState('');
-  const [appliedOrderDiscount, setAppliedOrderDiscount] = useState(0);
-  const [appliedOrderDiscountReason, setAppliedOrderDiscountReason] = useState('');
+  const [prepaymentInput, setPrepaymentInput] = useState('');
 
-  // Refund
-  const [showRefund, setShowRefund] = useState(false);
-  const [refundInput, setRefundInput] = useState('');
-  const [refundMethod, setRefundMethod] = useState<'nakit' | 'kredi_karti'>('nakit');
+  // Merge all orders
+  const allItems = useMemo(() => tableOrders.flatMap(o => o.items), [tableOrders]);
+  const orderTotal = useMemo(() => tableOrders.reduce((s, o) => s + o.total, 0), [tableOrders]);
+  const allPayments = useMemo(() => tableOrders.flatMap(o => o.payments || []), [tableOrders]);
+  const totalPaid = useMemo(() => allPayments.reduce((s, p) => s + p.amount, 0), [allPayments]);
+  const prepaymentTotal = useMemo(() => allPayments.filter(p => p.type === 'prepayment').reduce((s, p) => s + p.amount, 0), [allPayments]);
+  const paymentTotal = useMemo(() => allPayments.filter(p => p.type === 'payment').reduce((s, p) => s + p.amount, 0), [allPayments]);
+  const hasActiveOrders = tableOrders.some(o => o.status === 'active');
 
-  // Log
-  const [showLog, setShowLog] = useState(false);
-
-  // ─── Derived values ────────────────────────
-  const rawTotal = useMemo(
-    () => tableOrders.reduce((s, o) => s + o.total, 0),
-    [tableOrders],
-  );
-
-  const effectiveTotal = Math.max(0, rawTotal - appliedOrderDiscount);
-
-  const { totalPaid, totalRefunded } = useMemo(() => {
-    let paid = 0;
-    let refunded = 0;
-    for (const o of tableOrders) {
-      for (const p of o.payments || []) {
-        if (p.type === 'refund') refunded += Math.abs(p.amount);
-        else paid += p.amount;
-      }
-    }
-    return { totalPaid: paid, totalRefunded: refunded };
-  }, [tableOrders]);
-
-  const balance = effectiveTotal - totalPaid + totalRefunded;  // positive = still owed, negative = overpaid
-
-  const parsedAmount = parseFloat(amountInput) || 0;
-  const parsedReceived = parseFloat(receivedInput) || 0;
-  const change = method === 'nakit' && parsedReceived > 0 ? Math.max(0, parsedReceived - parsedAmount) : 0;
-
-  // Auto-fill amount with remaining balance when table orders load / balance changes
+  // Reset state when table changes
+  const orderIds = tableOrders.map(o => o.id).join(',');
   useEffect(() => {
-    if (balance > 0 && (!amountInput || parseFloat(amountInput) === 0)) {
-      setAmountInput(balance > 0 ? fmt(balance).replace(',', '.') : '');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tableOrders.length]);
-
-  // Auto-show refund UI when overpaid
-  useEffect(() => {
-    if (balance < -0.01) setShowRefund(true);
-  }, [balance]);
-
-  // ─── Handlers ─────────────────────────────
-  const handleApplyDiscount = () => {
-    if (!discountValue) return;
-    const v = parseFloat(discountValue);
-    if (isNaN(v) || v <= 0) return;
-    const amount = discountType === 'percent' ? Math.round((rawTotal * v) / 100 * 100) / 100 : v;
-    const reason = discountReason || (discountType === 'percent' ? `${v}% indirim` : 'Manuel indirim');
-    setAppliedOrderDiscount(amount);
-    setAppliedOrderDiscountReason(reason);
-    onOrderDiscount(amount, reason);
+    setPaymentMethod('nakit');
+    setShowAdvanced(false);
+    setAdvancedMode('normal');
+    setSelectedPayItems(new Set());
+    setSplitPersonCount(2);
     setShowDiscount(false);
     setDiscountValue('');
     setDiscountReason('');
+    setPrepaymentInput('');
+  }, [orderIds]);
+
+  const discountAmount = discountValue
+    ? discountType === 'percentage'
+      ? Math.round(orderTotal * Number(discountValue) / 100)
+      : Number(discountValue)
+    : 0;
+
+  const effectiveTotal = Math.max(0, orderTotal - discountAmount);
+  const remainingAmount = Math.max(0, effectiveTotal - totalPaid);
+
+  const getPayAmount = () => {
+    if (advancedMode === 'split_item') {
+      return allItems
+        .filter(i => selectedPayItems.has(i.id))
+        .reduce((sum, i) => {
+          const modExtra = i.modifiers.reduce((s, m) => s + m.extraPrice, 0);
+          return sum + (i.menuItem.price + modExtra) * i.quantity;
+        }, 0);
+    }
+    if (advancedMode === 'split_person') {
+      return Math.ceil(effectiveTotal / splitPersonCount);
+    }
+    return remainingAmount;
   };
 
-  const handleRemoveDiscount = () => {
-    setAppliedOrderDiscount(0);
-    setAppliedOrderDiscountReason('');
-    onOrderDiscount(0, '');
+  const payAmount = getPayAmount();
+
+  const getDiscountParams = () => {
+    const disc = discountAmount > 0 ? discountAmount : undefined;
+    const discReason = discountAmount > 0
+      ? (discountReason || `${discountType === 'percentage' ? `%${discountValue}` : `${discountValue} TL`} indirim`)
+      : undefined;
+    return { disc, discReason };
   };
 
-  const handlePay = async () => {
-    const amount = parsedAmount > 0 ? parsedAmount : balance > 0 ? balance : 0;
-    if (amount <= 0 || isSubmitting || tableOrders.length === 0) return;
-    await onCompletePayment(
-      amount,
-      method,
-      appliedOrderDiscount > 0 ? appliedOrderDiscount : undefined,
-      appliedOrderDiscount > 0 ? appliedOrderDiscountReason : undefined,
-    );
-    setAmountInput('');
-    setReceivedInput('');
+  const handlePay = () => {
+    if (isSubmitting || payAmount <= 0) return;
+    const { disc, discReason } = getDiscountParams();
+
+    if (advancedMode === 'split_item' && onPayOrderItems && selectedPayItems.size > 0) {
+      onPayOrderItems(Array.from(selectedPayItems), payAmount, paymentMethod, disc, discReason);
+    } else {
+      onCompletePayment(payAmount, paymentMethod, disc, discReason);
+    }
   };
 
-  const handleRefund = async () => {
-    const amount = parseFloat(refundInput) || Math.abs(balance);
-    if (amount <= 0 || isSubmitting) return;
-    await onRefund(amount, refundMethod);
-    setRefundInput('');
-    setShowRefund(false);
+  const handleQuickCash = (amount: number) => {
+    if (isSubmitting) return;
+    const { disc, discReason } = getDiscountParams();
+    onCompletePayment(amount, 'nakit', disc, discReason);
   };
 
-  const handleQuickAmount = (v: number) => {
-    setAmountInput(String(v));
-    if (method === 'nakit') setReceivedInput(String(v));
+  const handlePrepaymentSubmit = () => {
+    const amt = Number(prepaymentInput);
+    if (amt > 0 && !isSubmitting) {
+      onPrepayment(amt, paymentMethod);
+      setPrepaymentInput('');
+    }
   };
 
-  // ─── Balance status ────────────────────────
-  const balanceStatus: 'paid' | 'remaining' | 'overpaid' =
-    balance <= 0.01 && balance >= -0.01 ? 'paid'
-    : balance > 0 ? 'remaining'
-    : 'overpaid';
+  const handlePrintReceipt = () => {
+    onPrintAdisyon();
+  };
 
   if (tableOrders.length === 0) {
     return (
@@ -174,325 +138,249 @@ export default function CashierPaymentPanel({
   }
 
   return (
-    <div className="flex flex-col h-full bg-card border-l overflow-y-auto scrollbar-thin">
-
-      {/* ── Balance display ─────────────────────── */}
-      <div className={`p-4 border-b ${
-        balanceStatus === 'paid' ? 'bg-green-50 dark:bg-green-950/30'
-        : balanceStatus === 'overpaid' ? 'bg-red-50 dark:bg-red-950/30'
-        : 'bg-amber-50 dark:bg-amber-950/30'
-      }`}>
-        <div className="flex items-center gap-2 mb-2">
-          {balanceStatus === 'paid'
-            ? <CheckCircle2 className="w-5 h-5 text-green-600" />
-            : balanceStatus === 'overpaid'
-            ? <AlertCircle className="w-5 h-5 text-red-600" />
-            : <Clock className="w-5 h-5 text-amber-600" />
-          }
-          <span className={`text-sm font-bold ${
-            balanceStatus === 'paid' ? 'text-green-700 dark:text-green-400'
-            : balanceStatus === 'overpaid' ? 'text-red-700 dark:text-red-400'
-            : 'text-amber-700 dark:text-amber-400'
-          }`}>
-            {balanceStatus === 'paid' ? 'Ödendi ✓'
-             : balanceStatus === 'overpaid' ? 'Fazla Ödendi'
-             : 'Ödeme Bekleniyor'}
-          </span>
-        </div>
-
-        <div className="space-y-1">
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>Toplam</span>
-            <span className="font-medium text-foreground">{fmt(rawTotal)} ₺</span>
-          </div>
-          {appliedOrderDiscount > 0 && (
-            <div className="flex justify-between text-xs">
-              <span className="text-green-600 flex items-center gap-1">
-                <Tag className="w-3 h-3" /> {appliedOrderDiscountReason}
-              </span>
-              <span className="text-green-600 font-medium">-{fmt(appliedOrderDiscount)} ₺</span>
-            </div>
-          )}
-          {appliedOrderDiscount > 0 && (
-            <div className="flex justify-between text-xs font-semibold border-t border-current/20 pt-1">
-              <span>Efektif Toplam</span>
-              <span>{fmt(effectiveTotal)} ₺</span>
-            </div>
-          )}
-          {totalPaid > 0 && (
-            <div className="flex justify-between text-xs text-green-600">
-              <span>Ödenen</span>
-              <span className="font-medium">-{fmt(totalPaid)} ₺</span>
-            </div>
-          )}
-          {totalRefunded > 0 && (
-            <div className="flex justify-between text-xs text-red-500">
-              <span>İade</span>
-              <span className="font-medium">+{fmt(totalRefunded)} ₺</span>
-            </div>
-          )}
-          <div className={`flex justify-between font-bold text-lg pt-1 border-t ${
-            balanceStatus === 'paid' ? 'text-green-700 dark:text-green-400'
-            : balanceStatus === 'overpaid' ? 'text-red-600'
-            : 'text-amber-700 dark:text-amber-400'
-          }`}>
-            <span>{balanceStatus === 'overpaid' ? 'Fazla' : 'Kalan'}</span>
-            <span>{balanceStatus === 'overpaid' ? `+${fmt(Math.abs(balance))} ₺` : `${fmt(Math.max(0, balance))} ₺`}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Payment method tabs ─────────────────── */}
-      <div className="p-3 border-b">
-        <div className="flex rounded-lg overflow-hidden border">
-          <button
-            onClick={() => setMethod('nakit')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-bold transition-colors ${
-              method === 'nakit'
-                ? 'bg-green-600 text-white'
-                : 'bg-card text-muted-foreground hover:bg-muted'
-            }`}
-          >
-            <Banknote className="w-4 h-4" /> Nakit
-          </button>
-          <button
-            onClick={() => setMethod('kredi_karti')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-bold transition-colors border-l ${
-              method === 'kredi_karti'
-                ? 'bg-blue-600 text-white'
-                : 'bg-card text-muted-foreground hover:bg-muted'
-            }`}
-          >
-            <CreditCard className="w-4 h-4" /> Kart
-          </button>
-        </div>
-      </div>
-
-      {/* ── Amount input ────────────────────────── */}
-      <div className="p-3 border-b space-y-2">
-        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-          Tutar (₺)
-        </label>
-        <input
-          type="number"
-          value={amountInput}
-          onChange={e => setAmountInput(e.target.value)}
-          placeholder={balance > 0 ? fmt(balance) : '0,00'}
-          className="w-full px-3 py-2.5 rounded-lg border bg-background text-lg font-bold text-right"
-          onKeyDown={e => e.key === 'Enter' && handlePay()}
-        />
-
-        {/* Quick amounts */}
-        <div className="grid grid-cols-4 gap-1.5">
-          {QUICK_AMOUNTS.map(v => (
-            <button
-              key={v}
-              onClick={() => handleQuickAmount(v)}
-              className="py-1.5 rounded-lg border bg-muted hover:bg-muted/70 text-xs font-bold pos-btn"
-            >
-              {v}
-            </button>
-          ))}
-        </div>
-        {balance > 0 && (
-          <button
-            onClick={() => setAmountInput(fmt(balance).replace(',', '.'))}
-            className="w-full text-xs text-primary font-semibold py-1 rounded hover:bg-primary/5 pos-btn"
-          >
-            Kalan tutarı doldur ({fmt(balance)} ₺)
+    <div className="flex flex-col h-full bg-card border-l">
+      {/* Table Header */}
+      <div className="px-5 py-4 border-b shrink-0 flex items-center justify-between">
+        <h2 className="text-lg font-bold">{tableName} — Ödeme</h2>
+        {hasActiveOrders && onMarkReady && (
+          <button onClick={onMarkReady} className="px-3 py-1.5 rounded-lg bg-pos-warning text-pos-warning-foreground text-xs font-bold pos-btn">
+            Hazır İşaretle
           </button>
         )}
-
-        {/* Cash mode: received + change */}
-        {method === 'nakit' && (
-          <div className="space-y-1.5 pt-1">
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Alınan Nakit (opsiyonel)
-            </label>
-            <input
-              type="number"
-              value={receivedInput}
-              onChange={e => setReceivedInput(e.target.value)}
-              placeholder="Müşteriden alınan..."
-              className="w-full px-3 py-2 rounded-lg border bg-background text-sm text-right"
-            />
-            {change > 0 && (
-              <div className="flex justify-between items-center rounded-lg bg-green-50 dark:bg-green-950/30 px-3 py-2">
-                <span className="text-xs font-semibold text-green-700 dark:text-green-400">Para Üstü</span>
-                <span className="text-base font-bold text-green-700 dark:text-green-400">{fmt(change)} ₺</span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Pay button ─────────────────────────── */}
-        <button
-          onClick={handlePay}
-          disabled={isSubmitting || tableOrders.length === 0 || balance <= 0.01}
-          className={`w-full py-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 pos-btn disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${
-            method === 'nakit'
-              ? 'bg-green-600 hover:bg-green-700 text-white'
-              : 'bg-blue-600 hover:bg-blue-700 text-white'
-          }`}
-        >
-          {method === 'nakit' ? <Banknote className="w-4 h-4" /> : <CreditCard className="w-4 h-4" />}
-          {isSubmitting ? 'İşleniyor...' : `${method === 'nakit' ? 'Nakit' : 'Kart'} ile Öde`}
-        </button>
       </div>
 
-      {/* ── Order-level discount ─────────────────── */}
-      <div className="border-b">
-        <button
-          onClick={() => setShowDiscount(v => !v)}
-          className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-muted-foreground hover:bg-muted/50 pos-btn"
-        >
-          <span className="flex items-center gap-2">
-            <Percent className="w-4 h-4" />
-            {appliedOrderDiscount > 0
-              ? <span className="text-green-600">İndirim uygulandı: -{fmt(appliedOrderDiscount)} ₺</span>
-              : 'Sipariş İndirimi'}
-          </span>
-          {showDiscount ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-        </button>
-        {showDiscount && (
-          <div className="px-4 pb-4 space-y-2 bg-muted/20">
-            {appliedOrderDiscount > 0 && (
-              <button
-                onClick={handleRemoveDiscount}
-                className="w-full text-xs text-red-500 font-semibold py-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30 pos-btn"
-              >
-                İndirimi Kaldır
-              </button>
-            )}
-            <div className="flex rounded-lg overflow-hidden border">
-              <button
-                onClick={() => setDiscountType('percent')}
-                className={`flex-1 py-2 text-xs font-bold ${discountType === 'percent' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}
-              >
-                % Yüzde
-              </button>
-              <button
-                onClick={() => setDiscountType('fixed')}
-                className={`flex-1 py-2 text-xs font-bold border-l ${discountType === 'fixed' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}
-              >
-                ₺ Tutar
-              </button>
-            </div>
-            <input
-              type="number"
-              value={discountValue}
-              onChange={e => setDiscountValue(e.target.value)}
-              placeholder={discountType === 'percent' ? '% (örn. 10)' : '₺ (örn. 50)'}
-              className="w-full px-3 py-2 rounded-lg border bg-background text-sm"
-            />
-            <input
-              type="text"
-              value={discountReason}
-              onChange={e => setDiscountReason(e.target.value)}
-              placeholder="Sebep (opsiyonel)"
-              className="w-full px-3 py-2 rounded-lg border bg-background text-sm"
-            />
-            <button
-              onClick={handleApplyDiscount}
-              disabled={!discountValue}
-              className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-bold pos-btn disabled:opacity-40"
-            >
-              Uygula
-            </button>
-          </div>
-        )}
+      {/* Remaining Total */}
+      <div className="px-5 py-6 text-center border-b shrink-0">
+        <p className="text-4xl font-bold text-primary">{remainingAmount} ₺</p>
+        <div className="flex items-center justify-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
+          <span>Toplam: {orderTotal} ₺</span>
+          {discountAmount > 0 && <span className="text-pos-warning font-semibold">İndirim: -{discountAmount} ₺</span>}
+          {prepaymentTotal > 0 && <span className="text-blue-500 font-semibold">Ön ödeme: -{prepaymentTotal} ₺</span>}
+          {paymentTotal > 0 && <span className="text-pos-success font-semibold">Ödenen: {paymentTotal} ₺</span>}
+        </div>
       </div>
 
-      {/* ── Refund section ───────────────────────── */}
-      <div className="border-b">
-        <button
-          onClick={() => setShowRefund(v => !v)}
-          className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-muted-foreground hover:bg-muted/50 pos-btn"
-        >
-          <span className="flex items-center gap-2">
-            <RotateCcw className="w-4 h-4" />
-            {balanceStatus === 'overpaid'
-              ? <span className="text-red-500">Para İadesi Gerekli: {fmt(Math.abs(balance))} ₺</span>
-              : 'İade / Geri Ödeme'}
-          </span>
-          {showRefund ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-        </button>
-        {showRefund && (
-          <div className="px-4 pb-4 space-y-2 bg-red-50/50 dark:bg-red-950/20">
-            <div className="flex rounded-lg overflow-hidden border">
-              <button
-                onClick={() => setRefundMethod('nakit')}
-                className={`flex-1 py-2 text-xs font-bold ${refundMethod === 'nakit' ? 'bg-green-600 text-white' : 'bg-card text-muted-foreground hover:bg-muted'}`}
-              >
-                Nakit
-              </button>
-              <button
-                onClick={() => setRefundMethod('kredi_karti')}
-                className={`flex-1 py-2 text-xs font-bold border-l ${refundMethod === 'kredi_karti' ? 'bg-blue-600 text-white' : 'bg-card text-muted-foreground hover:bg-muted'}`}
-              >
-                Kart
-              </button>
-            </div>
-            <input
-              type="number"
-              value={refundInput}
-              onChange={e => setRefundInput(e.target.value)}
-              placeholder={balanceStatus === 'overpaid' ? fmt(Math.abs(balance)) : 'İade tutarı...'}
-              className="w-full px-3 py-2 rounded-lg border bg-background text-sm"
-            />
-            <button
-              onClick={handleRefund}
-              disabled={isSubmitting}
-              className="w-full py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold text-sm pos-btn disabled:opacity-40"
-            >
-              <RotateCcw className="w-4 h-4 inline mr-1.5" />
-              İade Et
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* ── Action log ───────────────────────────── */}
-      <div className="border-b">
-        <button
-          onClick={() => setShowLog(v => !v)}
-          className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-muted-foreground hover:bg-muted/50 pos-btn"
-        >
-          <span>İşlem Geçmişi ({actionLog.length})</span>
-          {showLog ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-        </button>
-        {showLog && (
-          <div className="max-h-48 overflow-y-auto scrollbar-thin px-4 pb-4 space-y-1.5">
-            {actionLog.length === 0
-              ? <p className="text-xs text-muted-foreground py-2 text-center">Henüz işlem yok</p>
-              : [...actionLog].reverse().map(entry => (
-                <div key={entry.id} className={`flex gap-2 items-start text-xs rounded-lg px-2.5 py-1.5 ${
-                  entry.type === 'payment' ? 'bg-green-50 text-green-800 dark:bg-green-950/30 dark:text-green-300'
-                  : entry.type === 'refund' ? 'bg-red-50 text-red-800 dark:bg-red-950/30 dark:text-red-300'
-                  : entry.type === 'void' ? 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
-                  : entry.type === 'return' ? 'bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300'
-                  : entry.type === 'discount' ? 'bg-blue-50 text-blue-800 dark:bg-blue-950/30 dark:text-blue-300'
-                  : 'bg-muted text-muted-foreground'
-                }`}>
-                  <span className="text-[10px] text-muted-foreground shrink-0 mt-0.5">
-                    {entry.ts.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto scrollbar-thin">
+        {/* Order Items */}
+        <div className="p-4 border-b">
+          <p className="text-xs font-bold text-muted-foreground uppercase mb-2">Sipariş Detayı</p>
+          <div className="space-y-1.5">
+            {allItems.map(item => {
+              const isPaid = item.paymentStatus === 'paid';
+              const itemTotal = (item.menuItem.price + item.modifiers.reduce((s, m) => s + m.extraPrice, 0)) * item.quantity;
+              return (
+                <div key={item.id} className={`flex items-center justify-between text-sm ${isPaid ? 'opacity-50' : ''}`}>
+                  <span className="flex items-center gap-1.5">
+                    {isPaid && <Check className="w-3.5 h-3.5 text-pos-success" />}
+                    <span className={isPaid ? 'line-through' : ''}>{item.quantity}x {item.menuItem.name}</span>
                   </span>
-                  <span className="leading-tight">{entry.message}</span>
+                  <span className="font-bold">{itemTotal} ₺</span>
                 </div>
-              ))
-            }
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Payment Method Cards */}
+        <div className="p-4 border-b">
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => setPaymentMethod('nakit')}
+              aria-pressed={paymentMethod === 'nakit'}
+              className={`flex items-center justify-center gap-2 p-4 rounded-xl border-2 font-bold text-base pos-btn transition-all ${
+                paymentMethod === 'nakit'
+                  ? 'border-green-500 bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
+                  : 'border-border bg-card hover:bg-muted'
+              }`}
+            >
+              <Banknote className="w-5 h-5" /> Nakit
+            </button>
+            <button
+              onClick={() => setPaymentMethod('kredi_karti')}
+              aria-pressed={paymentMethod === 'kredi_karti'}
+              className={`flex items-center justify-center gap-2 p-4 rounded-xl border-2 font-bold text-base pos-btn transition-all ${
+                paymentMethod === 'kredi_karti'
+                  ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400'
+                  : 'border-border bg-card hover:bg-muted'
+              }`}
+            >
+              <CreditCard className="w-5 h-5" /> Kredi Kartı
+            </button>
+          </div>
+        </div>
+
+        {/* Pay Button */}
+        {advancedMode !== 'prepayment' && (
+          <div className="p-4 border-b">
+            <button
+              onClick={handlePay}
+              disabled={isSubmitting || payAmount <= 0}
+              className={`w-full h-14 rounded-xl font-bold text-lg pos-btn transition-all disabled:opacity-40 ${
+                paymentMethod === 'nakit'
+                  ? 'bg-green-600 hover:bg-green-700 text-white'
+                  : 'bg-blue-600 hover:bg-blue-700 text-white'
+              }`}
+            >
+              {isSubmitting ? 'İşleniyor...' : `${payAmount} ₺ Ödeme Al`}
+            </button>
           </div>
         )}
-      </div>
 
-      {/* ── Print adisyon ────────────────────────── */}
-      <div className="p-3 mt-auto shrink-0">
-        <button
-          onClick={onPrintAdisyon}
-          className="w-full py-2 rounded-lg border text-sm font-semibold text-muted-foreground hover:bg-muted pos-btn"
-        >
-          Adisyon Yazdır
-        </button>
+        {/* Quick Cash (nakit only, normal mode only) */}
+        {paymentMethod === 'nakit' && advancedMode === 'normal' && (
+          <div className="px-4 pb-4 pt-0 border-b">
+            <p className="text-xs font-bold text-muted-foreground uppercase mb-2">Hızlı Nakit</p>
+            <div className="grid grid-cols-5 gap-2">
+              {[10, 20, 50, 100, 200].map(amount => (
+                <button
+                  key={amount}
+                  onClick={() => handleQuickCash(amount)}
+                  disabled={isSubmitting}
+                  className="py-3 rounded-lg bg-muted font-bold text-sm pos-btn hover:bg-muted-foreground/10 disabled:opacity-40"
+                >
+                  {amount}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Advanced Section */}
+        <div className="border-b">
+          <button
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-muted-foreground hover:bg-muted/50 pos-btn"
+          >
+            <span>Gelişmiş İşlemler</span>
+            {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+
+          {showAdvanced && (
+            <div className="px-4 pb-4 space-y-3">
+              {/* Mode tabs */}
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => setAdvancedMode(advancedMode === 'split_item' ? 'normal' : 'split_item')}
+                  className={`py-2.5 rounded-lg text-xs font-bold pos-btn flex flex-col items-center gap-0.5 ${advancedMode === 'split_item' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
+                >
+                  <SplitSquareHorizontal className="w-4 h-4" /> Ürüne Göre
+                </button>
+                <button
+                  onClick={() => setAdvancedMode(advancedMode === 'split_person' ? 'normal' : 'split_person')}
+                  className={`py-2.5 rounded-lg text-xs font-bold pos-btn flex flex-col items-center gap-0.5 ${advancedMode === 'split_person' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
+                >
+                  <Users className="w-4 h-4" /> Kişiye Göre
+                </button>
+                <button
+                  onClick={() => setAdvancedMode(advancedMode === 'prepayment' ? 'normal' : 'prepayment')}
+                  className={`py-2.5 rounded-lg text-xs font-bold pos-btn flex flex-col items-center gap-0.5 ${advancedMode === 'prepayment' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
+                >
+                  <Landmark className="w-4 h-4" /> Ön Ödeme
+                </button>
+              </div>
+
+              {/* Split by item */}
+              {advancedMode === 'split_item' && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-bold text-muted-foreground uppercase">Ödenecek ürünleri seçin</p>
+                  {allItems.map(item => {
+                    const isPaid = item.paymentStatus === 'paid';
+                    const itemTotal = (item.menuItem.price + item.modifiers.reduce((s, m) => s + m.extraPrice, 0)) * item.quantity;
+                    return (
+                      <button
+                        key={item.id}
+                        disabled={isPaid}
+                        onClick={() => setSelectedPayItems(prev => {
+                          const next = new Set(prev);
+                          next.has(item.id) ? next.delete(item.id) : next.add(item.id);
+                          return next;
+                        })}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm pos-btn border ${
+                          isPaid
+                            ? 'border-pos-success/30 bg-pos-success/5 opacity-60'
+                            : selectedPayItems.has(item.id)
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border bg-muted/30'
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5">
+                          {isPaid && <Check className="w-3.5 h-3.5 text-pos-success" />}
+                          <span className={isPaid ? 'line-through' : ''}>{item.quantity}x {item.menuItem.name}</span>
+                        </span>
+                        <span className="font-bold">{itemTotal} ₺</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Split by person */}
+              {advancedMode === 'split_person' && (
+                <div>
+                  <p className="text-xs font-bold text-muted-foreground uppercase mb-2">Kişi Sayısı</p>
+                  <div className="flex items-center gap-3 justify-center">
+                    <button onClick={() => setSplitPersonCount(Math.max(2, splitPersonCount - 1))} className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center pos-btn font-bold text-lg">-</button>
+                    <span className="text-3xl font-bold w-12 text-center">{splitPersonCount}</span>
+                    <button onClick={() => setSplitPersonCount(splitPersonCount + 1)} className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center pos-btn font-bold text-lg">+</button>
+                  </div>
+                  <p className="text-center text-sm text-muted-foreground mt-2">Kişi başı: <span className="font-bold text-foreground">{Math.ceil(effectiveTotal / splitPersonCount)} ₺</span></p>
+                </div>
+              )}
+
+              {/* Prepayment */}
+              {advancedMode === 'prepayment' && (
+                <div className="space-y-3">
+                  {prepaymentTotal > 0 && (
+                    <div className="px-3 py-2 rounded-lg bg-pos-success/10 border border-pos-success/20 text-sm text-pos-success font-semibold">
+                      Mevcut ön ödeme: {prepaymentTotal} ₺
+                    </div>
+                  )}
+                  <input
+                    value={prepaymentInput}
+                    onChange={e => setPrepaymentInput(e.target.value)}
+                    placeholder="Tutar girin (örn: 100)"
+                    type="number"
+                    className="w-full px-4 py-2.5 rounded-lg border bg-card text-sm"
+                  />
+                  <button
+                    onClick={handlePrepaymentSubmit}
+                    disabled={!prepaymentInput || Number(prepaymentInput) <= 0 || isSubmitting}
+                    className="w-full py-3 rounded-lg bg-primary text-primary-foreground font-bold text-sm pos-btn disabled:opacity-40"
+                  >
+                    Ön Ödeme Al {prepaymentInput ? `— ${prepaymentInput} ₺` : ''}
+                  </button>
+                </div>
+              )}
+
+              {/* Discount */}
+              <div>
+                {!showDiscount ? (
+                  <button onClick={() => setShowDiscount(true)} className="w-full py-2.5 rounded-lg bg-muted/60 font-semibold text-sm pos-btn flex items-center justify-center gap-2">
+                    <Percent className="w-4 h-4" /> İndirim Uygula
+                  </button>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <button onClick={() => setDiscountType('percentage')} className={`flex-1 py-2 rounded-lg text-xs font-bold pos-btn ${discountType === 'percentage' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>% Yüzde</button>
+                      <button onClick={() => setDiscountType('fixed')} className={`flex-1 py-2 rounded-lg text-xs font-bold pos-btn ${discountType === 'fixed' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>₺ Tutar</button>
+                    </div>
+                    <input value={discountValue} onChange={e => setDiscountValue(e.target.value)} placeholder={discountType === 'percentage' ? 'Yüzde (örn: 10)' : 'Tutar (örn: 50)'} type="number" className="w-full px-4 py-2.5 rounded-lg border bg-card text-sm" />
+                    <input value={discountReason} onChange={e => setDiscountReason(e.target.value)} placeholder="İndirim sebebi (opsiyonel)" className="w-full px-4 py-2.5 rounded-lg border bg-card text-sm" />
+                    {discountAmount > 0 && <p className="text-center text-sm font-bold text-pos-warning">İndirim: -{discountAmount} ₺</p>}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Receipt */}
+        <div className="p-4">
+          <button onClick={handlePrintReceipt} className="w-full py-3 rounded-lg border bg-card font-semibold text-sm pos-btn flex items-center justify-center gap-2">
+            <Printer className="w-4 h-4" /> Adisyon Yazdır
+          </button>
+        </div>
       </div>
     </div>
   );

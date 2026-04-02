@@ -698,12 +698,15 @@ export default function CashierPOS() {
           <div className="w-[30%] shrink-0 flex flex-col min-h-0 overflow-hidden">
             <CashierPaymentPanel
               tableOrders={tableOrders}
+              tableName={selectedTable?.name || ''}
+              restaurantName={restaurantName || 'RESTORAN'}
+              staffName={staffName || ''}
               isSubmitting={isSubmitting}
               onCompletePayment={handleCompletePayment}
-              onRefund={handleRefundPayment}
-              onOrderDiscount={handleOrderDiscount}
+              onPrepayment={handlePrepayment}
+              onPayOrderItems={handlePayOrderItems}
+              onMarkReady={handleMarkReady}
               onPrintAdisyon={printAdisyon}
-              actionLog={actionLog}
             />
           </div>
         </div>
