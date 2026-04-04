@@ -1,4 +1,5 @@
 import { useState, useRef, useMemo, useEffect } from 'react';
+import { toast } from 'sonner';
 import { usePrinter } from '@/hooks/use-printer';
 import { usePOS } from '@/context/POSContext';
 import { testPrint } from '@/lib/printer';
@@ -84,7 +85,7 @@ export default function PrinterSettings() {
     })));
   };
 
-  const saveStations = () => {
+  const saveStations = async () => {
     const removedIds = stations.filter(s => !draftStations.some(d => d.id === s.id)).map(s => s.id);
     for (const id of removedIds) removePrinterForStation(id);
     const newCategoryRouting = { ...printerConfig.categoryRouting };
@@ -93,9 +94,14 @@ export default function PrinterSettings() {
     }
     const prepDraft = draftStations.filter(s => s.purpose === 'prep');
     const defaultPrep = prepDraft.find(s => s.isDefault)?.id || prepDraft[0]?.id;
-    updatePrinterConfig({ ...printerConfig, stations: draftStations, categoryRouting: newCategoryRouting, defaultPrepStationId: defaultPrep });
-    setRouting(newCategoryRouting);
-    setEditingId(null);
+    const ok = await updatePrinterConfig({ ...printerConfig, stations: draftStations, categoryRouting: newCategoryRouting, defaultPrepStationId: defaultPrep });
+    if (ok) {
+      toast.success('Yazdirma noktalari kaydedildi');
+      setRouting(newCategoryRouting);
+      setEditingId(null);
+    } else {
+      toast.error('Kaydetme basarisiz oldu');
+    }
   };
 
   const resetStations = () => { setDraftStations(stations); setEditingId(null); };
@@ -110,7 +116,7 @@ export default function PrinterSettings() {
 
   // ─── Category routing ─────────────────────────
 
-  const handleCategoryRoute = (catId: string, stationId: string) => {
+  const handleCategoryRoute = async (catId: string, stationId: string) => {
     // Single source of truth: only save to Supabase printerConfig
     const newRouting = { ...printerConfig.categoryRouting };
     if (stationId === '') {
@@ -119,7 +125,8 @@ export default function PrinterSettings() {
       newRouting[catId] = stationId;
     }
     setRouting(newRouting);
-    updatePrinterConfig({ ...printerConfig, categoryRouting: newRouting });
+    const ok = await updatePrinterConfig({ ...printerConfig, categoryRouting: newRouting });
+    if (!ok) toast.error('Kategori yonlendirme kaydedilemedi');
   };
 
   // ─── Receipt settings (draft mode) ─────────────────────────
@@ -129,8 +136,10 @@ export default function PrinterSettings() {
   const updateReceipt = (patch: Partial<ReceiptSettings>) => {
     setDraftReceipt(prev => ({ ...prev, ...patch }));
   };
-  const saveReceiptSettings = () => {
-    updatePrinterConfig({ ...printerConfig, receiptSettings: draftReceipt });
+  const saveReceiptSettings = async () => {
+    const ok = await updatePrinterConfig({ ...printerConfig, receiptSettings: draftReceipt });
+    if (ok) toast.success('Fis ayarlari kaydedildi');
+    else toast.error('Fis ayarlari kaydedilemedi');
   };
   const resetReceiptSettings = () => {
     setDraftReceipt(receiptSettings);

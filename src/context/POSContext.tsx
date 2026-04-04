@@ -14,7 +14,7 @@ interface POSContextType {
   restaurantId: string;
   restaurantName: string;
   printerConfig: PrinterSettings;
-  updatePrinterConfig: (config: PrinterSettings) => Promise<void>;
+  updatePrinterConfig: (config: PrinterSettings) => Promise<boolean>;
   staffId: string | null;
   categories: Category[];
   setCategories: React.Dispatch<React.SetStateAction<Category[]>>;
@@ -207,13 +207,17 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
 
   // ─── Printer Config Persistence ────────────────
 
-  const updatePrinterConfig = useCallback(async (config: PrinterSettings) => {
+  const updatePrinterConfig = useCallback(async (config: PrinterSettings): Promise<boolean> => {
     setPrinterConfig(config);
     const { error } = await supabase
       .from('restaurants')
       .update({ settings: { printerConfig: config } })
       .eq('id', restaurantId);
-    if (error) console.error('[POSContext] Failed to save printer config:', error.message);
+    if (error) {
+      console.error('[POSContext] Failed to save printer config:', error.message);
+      return false;
+    }
+    return true;
   }, [restaurantId]);
 
   // ─── Initial Data Fetch ────────────────────────
