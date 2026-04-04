@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   connectQZ, disconnectQZ, getPrinters,
   getQZStatus, getQZError, isQZLoaded, onQZStatusChange,
-  getPrinterForRole, setPrinter, getAllPrinterAssignments,
-  QZConnectionStatus, PrinterRole,
+  getPrinterForStation, setPrinterForStation, removePrinterForStation,
+  getAllPrinterAssignments,
+  QZConnectionStatus,
 } from '@/lib/qz-tray';
 import { getPrintLog, onPrintLogChange, PrintJob } from '@/lib/print-manager';
 
@@ -11,7 +12,7 @@ export function usePrinter() {
   const [status, setStatus] = useState<QZConnectionStatus>(getQZStatus());
   const [error, setError] = useState<string | null>(getQZError());
   const [printers, setPrinterList] = useState<string[]>([]);
-  const [assignments, setAssignments] = useState(getAllPrinterAssignments());
+  const [assignments, setAssignments] = useState<Record<string, string>>(getAllPrinterAssignments());
   const [printLog, setPrintLog] = useState<PrintJob[]>(getPrintLog());
 
   useEffect(() => {
@@ -36,8 +37,12 @@ export function usePrinter() {
     setPrinterList(list);
   }, []);
 
-  const assignPrinter = useCallback((role: PrinterRole, name: string) => {
-    setPrinter(role, name);
+  const assignPrinter = useCallback((stationId: string, name: string) => {
+    if (name) {
+      setPrinterForStation(stationId, name);
+    } else {
+      removePrinterForStation(stationId);
+    }
     setAssignments(getAllPrinterAssignments());
   }, []);
 
@@ -51,7 +56,7 @@ export function usePrinter() {
     disconnect,
     refreshPrinters,
     assignPrinter,
-    getPrinterForRole,
+    getPrinterForStation,
     isQZLoaded: isQZLoaded(),
   };
 }

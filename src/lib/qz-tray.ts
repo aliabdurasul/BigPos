@@ -9,14 +9,10 @@ declare const qz: any;
 
 // ─── Types ─────────────────────────────────────
 
-export type PrinterRole = 'receipt' | 'kitchen' | 'bar';
 export type QZConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
-interface PrinterConfig {
-  receipt?: string;
-  kitchen?: string;
-  bar?: string;
-}
+/** Device-level printer bindings: stationId → system printer name */
+type PrinterConfig = Record<string, string>;
 
 // ─── Storage keys ──────────────────────────────
 
@@ -154,13 +150,19 @@ function saveConfig(cfg: PrinterConfig) {
   localStorage.setItem(PRINTER_KEY, JSON.stringify(cfg));
 }
 
-export function getPrinterForRole(role: PrinterRole): string | null {
-  return loadConfig()[role] || null;
+export function getPrinterForStation(stationId: string): string | null {
+  return loadConfig()[stationId] || null;
 }
 
-export function setPrinter(role: PrinterRole, name: string) {
+export function setPrinterForStation(stationId: string, name: string) {
   const cfg = loadConfig();
-  cfg[role] = name;
+  cfg[stationId] = name;
+  saveConfig(cfg);
+}
+
+export function removePrinterForStation(stationId: string) {
+  const cfg = loadConfig();
+  delete cfg[stationId];
   saveConfig(cfg);
 }
 
@@ -170,7 +172,8 @@ export function getAllPrinterAssignments(): PrinterConfig {
 
 // ─── Category routing config ───────────────────
 
-export function getCategoryRouting(): Record<string, PrinterRole> {
+/** categoryId → stationId */
+export function getCategoryRouting(): Record<string, string> {
   try {
     return JSON.parse(localStorage.getItem(ROUTING_KEY) || '{}');
   } catch {
@@ -178,9 +181,9 @@ export function getCategoryRouting(): Record<string, PrinterRole> {
   }
 }
 
-export function setCategoryRoute(categoryId: string, role: PrinterRole) {
+export function setCategoryRoute(categoryId: string, stationId: string) {
   const map = getCategoryRouting();
-  map[categoryId] = role;
+  map[categoryId] = stationId;
   localStorage.setItem(ROUTING_KEY, JSON.stringify(map));
 }
 
@@ -192,13 +195,13 @@ export function removeCategoryRoute(categoryId: string) {
 
 // ─── Raw print dispatch ────────────────────────
 
-export async function printRaw(role: PrinterRole, data: number[]): Promise<void> {
+export async function printRaw(stationId: string, data: number[]): Promise<void> {
   if (!isQZAvailable() || !qz.websocket.isActive()) {
     throw new Error('QZ Tray not connected');
   }
-  const printerName = getPrinterForRole(role);
+  const printerName = getPrinterForStation(stationId);
   if (!printerName) {
-    throw new Error(`No printer assigned for role: ${role}`);
+    throw new Error(`No printer assigned for station: ${stationId}`);
   }
   const config = qz.configs.create(printerName);
   const printData = [{ type: 'raw', format: 'command', data, options: { language: 'ESCPOS' } }];

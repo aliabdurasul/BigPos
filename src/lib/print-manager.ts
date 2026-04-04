@@ -7,7 +7,7 @@
  * - Category-based item routing to kitchen/bar printers
  */
 
-import { printRaw, PrinterRole, getCategoryRouting } from './qz-tray';
+import { printRaw, getCategoryRouting } from './qz-tray';
 
 // ─── Types ─────────────────────────────────────
 
@@ -15,7 +15,7 @@ export type PrintJobStatus = 'pending' | 'printing' | 'success' | 'failed';
 
 export interface PrintJob {
   id: string;
-  role: PrinterRole;
+  stationId: string;
   data: number[];
   fingerprint: string;
   status: PrintJobStatus;
@@ -99,7 +99,7 @@ async function processQueue() {
     for (let attempt = 1; attempt <= job.maxAttempts; attempt++) {
       job.attempts = attempt;
       try {
-        await printRaw(job.role, job.data);
+        await printRaw(job.stationId, job.data);
         success = true;
         break;
       } catch (err) {
@@ -136,7 +136,7 @@ function sleep(ms: number): Promise<void> {
  * Enqueue a print job. Returns false if deduplicated (skipped).
  */
 export function enqueue(
-  role: PrinterRole,
+  stationId: string,
   data: number[],
   fingerprint: string,
 ): boolean {
@@ -148,7 +148,7 @@ export function enqueue(
 
   const job: PrintJob = {
     id: `pj_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-    role,
+    stationId,
     data,
     fingerprint,
     status: 'pending',
@@ -166,31 +166,21 @@ export function enqueue(
 
 // ─── Category routing helper ───────────────────
 
-export interface RoutedItems<T> {
-  kitchen: T[];
-  bar: T[];
-  unrouted: T[];
-}
-
 /**
- * Split items by category → printer role using the routing config.
- * Items whose category has no routing go to `unrouted` (defaults to kitchen).
+ * Split items by category → stationId using the routing config.
+ * Items whose category has no routing go to `defaultStationId`.
  */
 export function routeItemsByCategory<T extends { menuItem: { categoryId: string } }>(
   items: T[],
-): RoutedItems<T> {
+  defaultStationId: string,
+): Record<string, T[]> {
   const routing = getCategoryRouting();
-  const result: RoutedItems<T> = { kitchen: [], bar: [], unrouted: [] };
+  const result: Record<string, T[]> = {};
 
   for (const item of items) {
-    const role = routing[item.menuItem.categoryId];
-    if (role === 'bar') {
-      result.bar.push(item);
-    } else if (role === 'kitchen') {
-      result.kitchen.push(item);
-    } else {
-      result.unrouted.push(item);
-    }
+    const stationId = routing[item.menuItem.categoryId] || defaultStationId;
+    if (!result[stationId]) result[stationId] = [];
+    result[stationId].push(item);
   }
 
   return result;

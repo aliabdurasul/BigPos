@@ -4,9 +4,8 @@
  */
 
 import { ESCPOSBuilder } from './escpos';
-import { PrinterRole } from './qz-tray';
 import { enqueue, buildFingerprint, routeItemsByCategory } from './print-manager';
-import { OrderItem, Payment } from '@/types/pos';
+import { OrderItem, Payment, ReceiptSettings, PrinterSettings, DEFAULT_RECEIPT_SETTINGS, DEFAULT_PRINTER_SETTINGS } from '@/types/pos';
 
 // ─── Helpers ───────────────────────────────────
 
@@ -38,8 +37,8 @@ export interface KitchenPrintData {
   restaurantName?: string;
 }
 
-function buildKitchenESCPOS(data: KitchenPrintData, items: OrderItem[]): number[] {
-  const b = new ESCPOSBuilder(80);
+function buildKitchenESCPOS(data: KitchenPrintData, items: OrderItem[], paperWidth: 58 | 80 = 80): number[] {
+  const b = new ESCPOSBuilder(paperWidth);
 
   b.bold(true).doubleHeight(true);
   b.center(data.tableName);
@@ -75,24 +74,22 @@ function buildKitchenESCPOS(data: KitchenPrintData, items: OrderItem[]): number[
 }
 
 /**
- * Print kitchen ticket — routes items by category to kitchen/bar printers.
- * Filters out non-new items automatically.
+ * Print kitchen ticket — routes items by category to prep stations.
+ * Uses printerConfig for station routing and paper width.
  */
-export function printKitchenTicket(data: KitchenPrintData): void {
+export function printKitchenTicket(data: KitchenPrintData, config?: PrinterSettings): void {
+  const cfg = config || DEFAULT_PRINTER_SETTINGS;
+  const paperWidth = cfg.receiptSettings?.paperWidth || 80;
+  const defaultPrepId = cfg.defaultPrepStationId || cfg.stations.find(s => s.purpose === 'prep' && s.isDefault)?.id || 'kitchen';
+
   const fp = buildFingerprint('kitchen', data.orderId);
-  const routed = routeItemsByCategory(data.items);
+  const routed = routeItemsByCategory(data.items, defaultPrepId);
 
-  // Kitchen items (routed + unrouted default to kitchen)
-  const kitchenItems = [...routed.kitchen, ...routed.unrouted];
-  if (kitchenItems.length > 0) {
-    const escpos = buildKitchenESCPOS(data, kitchenItems);
-    enqueue('kitchen', escpos, fp + ':kitchen');
-  }
-
-  // Bar items
-  if (routed.bar.length > 0) {
-    const escpos = buildKitchenESCPOS(data, routed.bar);
-    enqueue('bar', escpos, fp + ':bar');
+  for (const [stationId, items] of Object.entries(routed)) {
+    if (items.length > 0) {
+      const escpos = buildKitchenESCPOS(data, items, paperWidth as 58 | 80);
+      enqueue(stationId, escpos, fp + ':' + stationId);
+    }
   }
 }
 
@@ -111,11 +108,28 @@ export interface ReceiptPrintData {
   orderIds: string[];
 }
 
-function buildReceiptESCPOS(data: ReceiptPrintData): number[] {
-  const b = new ESCPOSBuilder(80);
+function buildReceiptESCPOS(data: ReceiptPrintData, settings?: ReceiptSettings): number[] {
+  const s = settings || DEFAULT_RECEIPT_SETTINGS;
+  const b = new ESCPOSBuilder(s.paperWidth);
 
   b.centerOn();
-  b.bold(true).text(data.restaurantName.toUpperCase()).bold(false);
+  // Logo / header
+  if (s.showLogo && s.logoText) {
+    b.bold(true);
+    if (s.fontSize === 'large') b.doubleHeight(true);
+    b.text(s.logoText.toUpperCase());
+    if (s.fontSize === 'large') b.doubleHeight(false);
+    b.bold(false);
+  } else {
+    b.bold(true);
+    if (s.fontSize === 'large') b.doubleHeight(true);
+    b.text(data.restaurantName.toUpperCase());
+    if (s.fontSize === 'large') b.doubleHeight(false);
+    b.bold(false);
+  }
+  if (s.headerText) {
+    b.text(s.headerText);
+  }
   b.leftAlign();
   b.text('');
 
@@ -123,16 +137,18 @@ function buildReceiptESCPOS(data: ReceiptPrintData): number[] {
   b.row('Tarih:', fmtDate(new Date()));
   b.row('Saat:', fmtTime(new Date()));
   b.row('Masa:', data.tableName);
-  if (data.staffName) b.row('Kasiyer:', data.staffName);
+  if (s.showStaffName && data.staffName) b.row('Kasiyer:', data.staffName);
   b.separator();
 
   // Items
   for (const item of data.items) {
     const total = itemTotal(item);
     b.row(`${item.quantity}x ${item.menuItem.name}`, fmtTL(total));
-    for (const mod of item.modifiers) {
-      if (mod.extraPrice > 0) {
-        b.row(`    + ${mod.optionName}`, `+${fmtTL(mod.extraPrice)}`);
+    if (s.showModifiers) {
+      for (const mod of item.modifiers) {
+        if (mod.extraPrice > 0) {
+          b.row(`    + ${mod.optionName}`, `+${fmtTL(mod.extraPrice)}`);
+        }
       }
     }
   }
@@ -148,7 +164,7 @@ function buildReceiptESCPOS(data: ReceiptPrintData): number[] {
   b.bold(true).row('TOPLAM', fmtTL(data.total)).bold(false);
 
   // Payments breakdown
-  if (data.payments.length > 0) {
+  if (s.showPaymentBreakdown && data.payments.length > 0) {
     b.separator('-');
     for (const p of data.payments) {
       const label = p.method === 'nakit' ? 'Nakit' : p.method === 'kredi_karti' ? 'Kart' : p.method;
@@ -163,30 +179,36 @@ function buildReceiptESCPOS(data: ReceiptPrintData): number[] {
 
   b.text('');
   b.centerOn();
-  b.text('Tesekkur ederiz!');
+  b.text(s.footerText || 'Tesekkur ederiz!');
   b.leftAlign();
   b.text('');
   b.cut();
-  b.openDrawer();
+  if (s.openDrawer) b.openDrawer();
 
   return b.build();
 }
 
-export function printPaymentReceipt(data: ReceiptPrintData): void {
+export function printPaymentReceipt(data: ReceiptPrintData, config?: PrinterSettings): void {
+  const cfg = config || DEFAULT_PRINTER_SETTINGS;
+  const receiptStationId = cfg.stations.find(s => s.purpose === 'receipt')?.id || 'receipt';
   const fp = buildFingerprint('receipt', data.orderIds.join('-'));
-  const escpos = buildReceiptESCPOS(data);
-  enqueue('receipt', escpos, fp);
+  const escpos = buildReceiptESCPOS(data, cfg.receiptSettings);
+
+  const copies = cfg.receiptSettings?.copies || 1;
+  for (let i = 0; i < copies; i++) {
+    enqueue(receiptStationId, escpos, i === 0 ? fp : fp + `:copy${i}`);
+  }
 }
 
 // ─── Test Print ────────────────────────────────
 
-export function testPrint(role: PrinterRole): void {
-  const b = new ESCPOSBuilder(80);
+export function testPrint(stationId: string, paperWidth: 58 | 80 = 80): void {
+  const b = new ESCPOSBuilder(paperWidth);
   b.centerOn();
   b.bold(true).text('BigPOS TEST PRINT').bold(false);
   b.leftAlign();
   b.separator();
-  b.row('Printer Role:', role);
+  b.row('Station:', stationId);
   b.row('Time:', fmtTime(new Date()));
   b.row('Date:', fmtDate(new Date()));
   b.separator();
@@ -196,8 +218,8 @@ export function testPrint(role: PrinterRole): void {
   b.centerOn().text('-- OK --').leftAlign();
   b.cut();
 
-  const fp = buildFingerprint('test', `${role}_${Date.now()}`);
-  enqueue(role, b.build(), fp);
+  const fp = buildFingerprint('test', `${stationId}_${Date.now()}`);
+  enqueue(stationId, b.build(), fp);
 }
 
 // ─── End of Day Report ─────────────────────────
@@ -213,8 +235,11 @@ export interface EndOfDayPrintData {
   topProducts: { name: string; count: number }[];
 }
 
-export function printEndOfDayReport(data: EndOfDayPrintData): void {
-  const b = new ESCPOSBuilder(80);
+export function printEndOfDayReport(data: EndOfDayPrintData, config?: PrinterSettings): void {
+  const cfg = config || DEFAULT_PRINTER_SETTINGS;
+  const receiptStationId = cfg.stations.find(s => s.purpose === 'receipt')?.id || 'receipt';
+  const paperWidth = cfg.receiptSettings?.paperWidth || 80;
+  const b = new ESCPOSBuilder(paperWidth);
 
   b.centerOn();
   b.bold(true).text(data.restaurantName.toUpperCase()).bold(false);
@@ -252,5 +277,5 @@ export function printEndOfDayReport(data: EndOfDayPrintData): void {
   b.cut();
 
   const fp = buildFingerprint('eod', fmtDate(data.date));
-  enqueue('receipt', b.build(), fp);
+  enqueue(receiptStationId, b.build(), fp);
 }

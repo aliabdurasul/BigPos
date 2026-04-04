@@ -195,6 +195,60 @@ export interface KitchenLog {
   createdAt: Date;
 }
 
+// ─── Printer / Receipt Types ───────────────────
+
+export type PrintStationPurpose = 'receipt' | 'prep';
+
+export interface PrintStation {
+  id: string;
+  name: string;
+  purpose: PrintStationPurpose;
+  isDefault: boolean;
+  active: boolean;
+}
+
+export interface ReceiptSettings {
+  paperWidth: 58 | 80;
+  showLogo: boolean;
+  logoText?: string;
+  headerText?: string;
+  footerText: string;
+  showPaymentBreakdown: boolean;
+  showModifiers: boolean;
+  showStaffName: boolean;
+  fontSize: 'normal' | 'large';
+  openDrawer: boolean;
+  copies: number;
+}
+
+export interface PrinterSettings {
+  stations: PrintStation[];
+  receiptSettings: ReceiptSettings;
+  categoryRouting: Record<string, string>; // categoryId → stationId
+  defaultPrepStationId?: string;
+}
+
+export const DEFAULT_RECEIPT_SETTINGS: ReceiptSettings = {
+  paperWidth: 80,
+  showLogo: true,
+  footerText: 'Tesekkur ederiz!',
+  showPaymentBreakdown: true,
+  showModifiers: true,
+  showStaffName: true,
+  fontSize: 'normal',
+  openDrawer: true,
+  copies: 1,
+};
+
+export const DEFAULT_PRINTER_SETTINGS: PrinterSettings = {
+  stations: [
+    { id: 'receipt', name: 'Kasa', purpose: 'receipt', isDefault: true, active: true },
+    { id: 'kitchen', name: 'Mutfak', purpose: 'prep', isDefault: true, active: true },
+  ],
+  receiptSettings: { ...DEFAULT_RECEIPT_SETTINGS },
+  categoryRouting: {},
+};
+
 // ─── Discount Types ────────────────────────────
 
 export type DiscountType = 'percentage' | 'fixed';

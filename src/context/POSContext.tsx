@@ -4,6 +4,7 @@ import {
   Category, MenuItem, Table, Order, OrderItem, OrderStatus,
   ModifierGroup, TableStatus, Payment, ModifierOption,
   Staff, DailyClosure, ItemStatus,
+  PrinterSettings, DEFAULT_PRINTER_SETTINGS,
 } from '@/types/pos';
 
 // ─── Context Type ──────────────────────────────────
@@ -12,6 +13,8 @@ interface POSContextType {
   loading: boolean;
   restaurantId: string;
   restaurantName: string;
+  printerConfig: PrinterSettings;
+  updatePrinterConfig: (config: PrinterSettings) => Promise<void>;
   staffId: string | null;
   categories: Category[];
   setCategories: React.Dispatch<React.SetStateAction<Category[]>>;
@@ -189,6 +192,7 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
   const [staff, setStaff] = useState<Staff[]>([]);
   const [productModifierMap, setProductModifierMap] = useState<Map<string, string[]>>(new Map());
   const [restaurantName, setRestaurantName] = useState('');
+  const [printerConfig, setPrinterConfig] = useState<PrinterSettings>(DEFAULT_PRINTER_SETTINGS);
 
   const floorMapRef = useRef(new Map<string, string>());
   const reverseFloorMapRef = useRef(new Map<string, string>());
@@ -200,6 +204,17 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
   useEffect(() => {
     menuItemsRef.current = new Map(menuItems.map(m => [m.id, m]));
   }, [menuItems]);
+
+  // ─── Printer Config Persistence ────────────────
+
+  const updatePrinterConfig = useCallback(async (config: PrinterSettings) => {
+    setPrinterConfig(config);
+    const { error } = await supabase
+      .from('restaurants')
+      .update({ settings: { printerConfig: config } })
+      .eq('id', restaurantId);
+    if (error) console.error('[POSContext] Failed to save printer config:', error.message);
+  }, [restaurantId]);
 
   // ─── Initial Data Fetch ────────────────────────
 
@@ -235,7 +250,7 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
           supabase.from('payments').select('*').eq('restaurant_id', rid),
           supabase.from('staff').select('*').eq('restaurant_id', rid).eq('active', true),
           supabase.from('product_modifier_groups').select('*'),
-          supabase.from('restaurants').select('name').eq('id', rid).single(),
+          supabase.from('restaurants').select('name, settings').eq('id', rid).single(),
         ]);
 
         if (floorsErr)   console.error('[fetchAll] floors error — migration may not be applied:', floorsErr.message);
@@ -255,7 +270,13 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
 
         if (cancelled) return;
 
-        if (restData) setRestaurantName((restData as { name: string }).name);
+        if (restData) {
+          const rd = restData as { name: string; settings?: Record<string, unknown> };
+          setRestaurantName(rd.name);
+          if (rd.settings?.printerConfig) {
+            setPrinterConfig({ ...DEFAULT_PRINTER_SETTINGS, ...(rd.settings.printerConfig as PrinterSettings) });
+          }
+        }
 
         const fMap = new Map<string, string>();
         const rMap = new Map<string, string>();
@@ -1049,6 +1070,7 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
     <POSContext.Provider value={{
       loading,
       restaurantId, restaurantName, staffId,
+      printerConfig, updatePrinterConfig,
       categories, setCategories,
       menuItems, setMenuItems,
       tables, setTables,

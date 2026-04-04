@@ -1,61 +1,120 @@
-import { useState, useEffect } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { usePrinter } from '@/hooks/use-printer';
 import { usePOS } from '@/context/POSContext';
 import { testPrint } from '@/lib/printer';
-import { getCategoryRouting, setCategoryRoute, removeCategoryRoute, PrinterRole } from '@/lib/qz-tray';
+import { getCategoryRouting, setCategoryRoute, removeCategoryRoute } from '@/lib/qz-tray';
+import { PrintStation, PrintStationPurpose, ReceiptSettings, DEFAULT_RECEIPT_SETTINGS } from '@/types/pos';
 import {
   Wifi, WifiOff, Loader2, Printer, RefreshCw, CheckCircle, XCircle,
   Clock, ChevronDown, ChevronRight, Download, AlertCircle, Info,
+  Plus, Trash2,
 } from 'lucide-react';
 
-const ROLES: { key: PrinterRole; label: string; desc: string }[] = [
-  { key: 'receipt', label: 'Kasa Fisi', desc: 'Musteri fislerini ve odemeleri yazdirir' },
-  { key: 'kitchen', label: 'Mutfak', desc: 'Yemek siparislerini mutfaga gonderir' },
-  { key: 'bar', label: 'Bar', desc: 'Icecek siparislerini bara gonderir' },
-];
+function genId(): string {
+  return 'st_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+}
 
 export default function PrinterSettings() {
   const { status, error, printers, assignments, printLog, connect, disconnect, refreshPrinters, assignPrinter, isQZLoaded } = usePrinter();
-  const { categories } = usePOS();
+  const { categories, printerConfig, updatePrinterConfig } = usePOS();
   const [routing, setRouting] = useState(getCategoryRouting());
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [testingRole, setTestingRole] = useState<PrinterRole | null>(null);
+  const [testingStation, setTestingStation] = useState<string | null>(null);
+  const [newStationName, setNewStationName] = useState('');
+  const [newStationPurpose, setNewStationPurpose] = useState<PrintStationPurpose>('prep');
 
-  // Auto-assign if only 1 printer found and nothing assigned yet
-  useEffect(() => {
-    if (printers.length === 1 && !assignments.receipt && !assignments.kitchen) {
-      assignPrinter('receipt', printers[0]);
-      assignPrinter('kitchen', printers[0]);
-    }
-  }, [printers, assignments, assignPrinter]);
+  // Debounced save
+  const saveTimer = useRef<ReturnType<typeof setTimeout>>();
+  const saveConfig = useCallback((partial: Partial<typeof printerConfig>) => {
+    const next = { ...printerConfig, ...partial };
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => updatePrinterConfig(next), 500);
+  }, [printerConfig, updatePrinterConfig]);
 
-  const handleCategoryRoute = (catId: string, role: string) => {
-    if (role === '') {
+  const stations = printerConfig.stations;
+  const receiptSettings = printerConfig.receiptSettings || DEFAULT_RECEIPT_SETTINGS;
+  const prepStations = stations.filter(s => s.purpose === 'prep' && s.active);
+
+  // ─── Station management ────────────────────────
+
+  const addStation = () => {
+    const name = newStationName.trim();
+    if (!name) return;
+    const station: PrintStation = {
+      id: genId(),
+      name,
+      purpose: newStationPurpose,
+      isDefault: newStationPurpose === 'receipt' ? !stations.some(s => s.purpose === 'receipt') : !stations.some(s => s.purpose === 'prep' && s.isDefault),
+      active: true,
+    };
+    saveConfig({ stations: [...stations, station] });
+    setNewStationName('');
+  };
+
+  const removeStation = (id: string) => {
+    saveConfig({ stations: stations.filter(s => s.id !== id) });
+  };
+
+  const setDefaultStation = (id: string) => {
+    const target = stations.find(s => s.id === id);
+    if (!target) return;
+    const updated = stations.map(s => ({
+      ...s,
+      isDefault: s.purpose === target.purpose ? s.id === id : s.isDefault,
+    }));
+    const patch: Partial<typeof printerConfig> = { stations: updated };
+    if (target.purpose === 'prep') patch.defaultPrepStationId = id;
+    saveConfig(patch);
+  };
+
+  // ─── Category routing ─────────────────────────
+
+  const handleCategoryRoute = (catId: string, stationId: string) => {
+    if (stationId === '') {
       removeCategoryRoute(catId);
     } else {
-      setCategoryRoute(catId, role as PrinterRole);
+      setCategoryRoute(catId, stationId);
     }
     setRouting(getCategoryRouting());
+    // Also save to printerConfig for persistence
+    const newRouting = { ...printerConfig.categoryRouting };
+    if (stationId === '') {
+      delete newRouting[catId];
+    } else {
+      newRouting[catId] = stationId;
+    }
+    saveConfig({ categoryRouting: newRouting });
   };
 
-  const handleTestPrint = (role: PrinterRole) => {
-    setTestingRole(role);
-    testPrint(role);
-    setTimeout(() => setTestingRole(null), 2000);
+  // ─── Receipt settings ─────────────────────────
+
+  const updateReceipt = (patch: Partial<ReceiptSettings>) => {
+    saveConfig({ receiptSettings: { ...receiptSettings, ...patch } });
   };
 
-  // Setup checklist
+  // ─── Test print ────────────────────────────────
+
+  const handleTestPrint = (stationId: string) => {
+    setTestingStation(stationId);
+    testPrint(stationId, receiptSettings.paperWidth);
+    setTimeout(() => setTestingStation(null), 2000);
+  };
+
+  // ─── Setup checklist ──────────────────────────
+
   const isConnected = status === 'connected';
   const hasPrinters = printers.length > 0;
-  const hasReceipt = !!assignments.receipt;
-  const hasKitchen = !!assignments.kitchen;
+  const hasReceiptStation = stations.some(s => s.purpose === 'receipt');
+  const hasPrepStation = stations.some(s => s.purpose === 'prep');
+  const hasAnyAssignment = Object.keys(assignments).length > 0;
 
   const steps = [
     { done: isQZLoaded, label: isQZLoaded ? 'QZ Tray kutuphanesi yuklendi' : 'QZ Tray kutuphanesi yuklenemedi — sayfayi yenileyin', visible: true },
     { done: isConnected, label: 'QZ Tray baglantisi kuruldu', visible: true },
     { done: hasPrinters, label: 'Yazici bulundu', visible: isConnected },
-    { done: hasReceipt, label: 'Kasa fisi yazicisi secildi', visible: hasPrinters },
-    { done: hasKitchen, label: 'Mutfak yazicisi secildi', visible: hasPrinters },
+    { done: hasReceiptStation, label: 'Kasa istasyonu tanimlandi', visible: true },
+    { done: hasPrepStation, label: 'Hazirlik istasyonu tanimlandi', visible: true },
+    { done: hasAnyAssignment, label: 'En az bir yazici atandi', visible: hasPrinters },
   ];
 
   return (
@@ -64,7 +123,7 @@ export default function PrinterSettings() {
       <div>
         <h2 className="text-lg font-bold">Yazici Ayarlari</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Siparis fislerini ve mutfak bildirimlerini otomatik yazdirmak icin yazicilarinizi ayarlayin.
+          Yazdirma noktalarinizi tanimlayin, yazici atayin ve fis tasarimini ayarlayin.
         </p>
       </div>
 
@@ -132,7 +191,6 @@ export default function PrinterSettings() {
           )}
         </div>
 
-        {/* Connecting state — show hint about QZ permission dialog */}
         {status === 'connecting' && (
           <div className="rounded-md bg-blue-50 dark:bg-blue-950/30 p-3 flex items-start gap-2">
             <Loader2 className="w-4 h-4 text-blue-500 mt-0.5 shrink-0 animate-spin" />
@@ -143,7 +201,6 @@ export default function PrinterSettings() {
           </div>
         )}
 
-        {/* Error state — show specific error message */}
         {status === 'error' && error && (
           <div className="rounded-md bg-red-50 dark:bg-red-950/30 p-3 flex items-start gap-2">
             <XCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
@@ -154,7 +211,6 @@ export default function PrinterSettings() {
           </div>
         )}
 
-        {/* Help text when not connected and not connecting */}
         {!isConnected && status !== 'connecting' && status !== 'error' && (
           <div className="rounded-md bg-muted/50 p-4 space-y-2">
             <div className="flex items-start gap-2">
@@ -172,7 +228,6 @@ export default function PrinterSettings() {
           </div>
         )}
 
-        {/* Printer count when connected */}
         {isConnected && (
           <div className="flex items-center justify-between text-sm">
             <div className="flex items-center gap-2 text-muted-foreground">
@@ -186,90 +241,258 @@ export default function PrinterSettings() {
         )}
       </div>
 
-      {/* Printer Role Assignments */}
-      {isConnected && hasPrinters && (
-        <div className="rounded-lg border bg-card p-5 space-y-4">
-          <div>
-            <h3 className="font-semibold text-sm">Yazici Atamalari</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">Her islem icin hangi yazicinin kullanilacagini secin</p>
-          </div>
-          <div className="space-y-4">
-            {ROLES.map(({ key, label, desc }) => (
-              <div key={key} className="rounded-md border p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold">{label}</p>
-                    <p className="text-xs text-muted-foreground">{desc}</p>
-                  </div>
-                  {assignments[key] && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-bold uppercase">Atandi</span>
+      {/* ═══ Print Stations ═══ */}
+      <div className="rounded-lg border bg-card p-5 space-y-4">
+        <div>
+          <h3 className="font-semibold text-sm">Yazdirma Noktalari</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Yazdirma noktasi ekleyin ve her birine yazici atayin</p>
+        </div>
+
+        {/* Existing stations */}
+        <div className="space-y-3">
+          {stations.map(station => (
+            <div key={station.id} className="rounded-md border p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold">{station.name}</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                    station.purpose === 'receipt' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'
+                  }`}>
+                    {station.purpose === 'receipt' ? 'Kasa' : 'Hazirlik'}
+                  </span>
+                  {station.isDefault && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-bold uppercase">Varsayilan</span>
                   )}
                 </div>
+                <div className="flex items-center gap-1">
+                  {!station.isDefault && (
+                    <button onClick={() => setDefaultStation(station.id)} className="text-[10px] px-2 py-1 rounded border hover:bg-muted pos-btn">
+                      Varsayilan Yap
+                    </button>
+                  )}
+                  <button onClick={() => removeStation(station.id)} className="p-1.5 rounded hover:bg-red-50 text-red-400 hover:text-red-600 pos-btn">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Printer assignment (when connected) */}
+              {isConnected && hasPrinters && (
                 <div className="flex items-center gap-2">
                   <select
-                    value={assignments[key] || ''}
-                    onChange={e => assignPrinter(key, e.target.value)}
+                    value={assignments[station.id] || ''}
+                    onChange={e => assignPrinter(station.id, e.target.value)}
                     className="flex-1 border rounded-md px-3 py-2 text-sm bg-background"
                   >
                     <option value="">Yazici secin...</option>
                     {printers.map(p => <option key={p} value={p}>{p}</option>)}
                   </select>
                   <button
-                    onClick={() => handleTestPrint(key)}
-                    disabled={!assignments[key] || testingRole === key}
+                    onClick={() => handleTestPrint(station.id)}
+                    disabled={!assignments[station.id] || testingStation === station.id}
                     className="px-3 py-2 text-xs border rounded-md hover:bg-muted disabled:opacity-40 font-medium pos-btn flex items-center gap-1"
                   >
-                    {testingRole === key ? (
+                    {testingStation === station.id ? (
                       <><Loader2 size={12} className="animate-spin" /> Yazdiriliyor</>
                     ) : (
                       <>Test Yazdir</>
                     )}
                   </button>
                 </div>
+              )}
+              {!isConnected && assignments[station.id] && (
+                <p className="text-xs text-muted-foreground">Atanan: {assignments[station.id]}</p>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Add new station */}
+        <div className="flex items-center gap-2 pt-2 border-t">
+          <input
+            value={newStationName}
+            onChange={e => setNewStationName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addStation()}
+            placeholder="Yeni istasyon adi..."
+            className="flex-1 border rounded-md px-3 py-2 text-sm bg-background"
+          />
+          <select
+            value={newStationPurpose}
+            onChange={e => setNewStationPurpose(e.target.value as PrintStationPurpose)}
+            className="w-32 border rounded-md px-2 py-2 text-sm bg-background"
+          >
+            <option value="prep">Hazirlik</option>
+            <option value="receipt">Kasa</option>
+          </select>
+          <button
+            onClick={addStation}
+            disabled={!newStationName.trim()}
+            className="px-3 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:opacity-90 font-medium pos-btn flex items-center gap-1 disabled:opacity-40"
+          >
+            <Plus size={14} /> Ekle
+          </button>
+        </div>
+      </div>
+
+      {/* ═══ Category Routing ═══ */}
+      {prepStations.length > 1 && categories.length > 0 && (
+        <div className="rounded-lg border bg-card p-5 space-y-4">
+          <div>
+            <h3 className="font-semibold text-sm">Kategori Yonlendirme</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Hangi kategorilerin hangi hazirlik noktasina gidecegini belirleyin
+            </p>
+          </div>
+          <div className="space-y-2">
+            {categories.map(cat => (
+              <div key={cat.id} className="flex items-center justify-between gap-3 py-2 border-b last:border-0">
+                <span className="text-sm font-medium truncate">{cat.icon ? `${cat.icon} ` : ''}{cat.name}</span>
+                <select
+                  value={routing[cat.id] || ''}
+                  onChange={e => handleCategoryRoute(cat.id, e.target.value)}
+                  className="w-48 border rounded-md px-2 py-1.5 text-sm bg-background"
+                >
+                  <option value="">Varsayilan</option>
+                  {prepStations.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Category Routing */}
-      {isConnected && hasPrinters && categories.length > 0 && (assignments.kitchen || assignments.bar) && (
-        <div className="rounded-lg border bg-card p-5 space-y-4">
-          <div>
-            <h3 className="font-semibold text-sm">Kategori Yonlendirme</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {assignments.bar
-                ? 'Hangi kategorilerin bara, hangilerinin mutfaga gidecegini belirleyin'
-                : 'Tum siparisler mutfak yazicisina gonderilir'}
-            </p>
-          </div>
-          {assignments.bar && (
-            <div className="space-y-2">
-              {categories.map(cat => (
-                <div key={cat.id} className="flex items-center justify-between gap-3 py-2 border-b last:border-0">
-                  <span className="text-sm font-medium truncate">{cat.icon ? `${cat.icon} ` : ''}{cat.name}</span>
-                  <select
-                    value={routing[cat.id] || ''}
-                    onChange={e => handleCategoryRoute(cat.id, e.target.value)}
-                    className="w-44 border rounded-md px-2 py-1.5 text-sm bg-background"
-                  >
-                    <option value="">Mutfak (varsayilan)</option>
-                    <option value="kitchen">Mutfak</option>
-                    <option value="bar">Bar</option>
-                  </select>
-                </div>
+      {/* ═══ Receipt Design Settings ═══ */}
+      <div className="rounded-lg border bg-card p-5 space-y-4">
+        <div>
+          <h3 className="font-semibold text-sm">Fis Tasarimi</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Musteri fislerinin gorunumunu ayarlayin</p>
+        </div>
+
+        <div className="space-y-4">
+          {/* Paper width */}
+          <div className="flex items-center justify-between">
+            <label className="text-sm">Kagit Genisligi</label>
+            <div className="flex rounded-md border overflow-hidden">
+              {([58, 80] as const).map(w => (
+                <button
+                  key={w}
+                  onClick={() => updateReceipt({ paperWidth: w })}
+                  className={`px-4 py-1.5 text-sm font-medium pos-btn ${
+                    receiptSettings.paperWidth === w ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                  }`}
+                >
+                  {w}mm
+                </button>
               ))}
             </div>
-          )}
-          {!assignments.bar && (
-            <div className="text-xs text-muted-foreground bg-muted/50 rounded-md p-3">
-              Bar yazicisi atandiginda, icecek kategorilerini bara yonlendirebilirsiniz.
-            </div>
-          )}
-        </div>
-      )}
+          </div>
 
-      {/* Advanced Section (Logs) */}
+          {/* Logo text */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-sm">Logo Metni</label>
+              <label className="flex items-center gap-2 text-xs">
+                <input type="checkbox" checked={receiptSettings.showLogo} onChange={e => updateReceipt({ showLogo: e.target.checked })} className="rounded" />
+                Goster
+              </label>
+            </div>
+            {receiptSettings.showLogo && (
+              <input
+                value={receiptSettings.logoText || ''}
+                onChange={e => updateReceipt({ logoText: e.target.value })}
+                placeholder="Restoran adi kullanilir"
+                className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+              />
+            )}
+          </div>
+
+          {/* Header text */}
+          <div className="space-y-1">
+            <label className="text-sm">Baslik Metni</label>
+            <input
+              value={receiptSettings.headerText || ''}
+              onChange={e => updateReceipt({ headerText: e.target.value })}
+              placeholder="Opsiyonel baslik satiri"
+              className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+            />
+          </div>
+
+          {/* Footer text */}
+          <div className="space-y-1">
+            <label className="text-sm">Alt Bilgi</label>
+            <input
+              value={receiptSettings.footerText}
+              onChange={e => updateReceipt({ footerText: e.target.value })}
+              placeholder="Tesekkur ederiz!"
+              className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+            />
+          </div>
+
+          {/* Font size */}
+          <div className="flex items-center justify-between">
+            <label className="text-sm">Yazi Boyutu</label>
+            <div className="flex rounded-md border overflow-hidden">
+              {(['normal', 'large'] as const).map(fs => (
+                <button
+                  key={fs}
+                  onClick={() => updateReceipt({ fontSize: fs })}
+                  className={`px-4 py-1.5 text-sm font-medium pos-btn ${
+                    receiptSettings.fontSize === fs ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                  }`}
+                >
+                  {fs === 'normal' ? 'Normal' : 'Buyuk'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Toggles */}
+          <div className="space-y-3 pt-2 border-t">
+            {[
+              { key: 'showPaymentBreakdown' as const, label: 'Odeme Detayi Goster' },
+              { key: 'showModifiers' as const, label: 'Modifier Goster' },
+              { key: 'showStaffName' as const, label: 'Personel Adi Goster' },
+              { key: 'openDrawer' as const, label: 'Cekmece Ac' },
+            ].map(({ key, label }) => (
+              <div key={key} className="flex items-center justify-between">
+                <label className="text-sm">{label}</label>
+                <button
+                  onClick={() => updateReceipt({ [key]: !receiptSettings[key] })}
+                  className={`w-10 h-6 rounded-full transition-colors relative pos-btn ${
+                    receiptSettings[key] ? 'bg-primary' : 'bg-muted-foreground/30'
+                  }`}
+                >
+                  <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                    receiptSettings[key] ? 'translate-x-4' : 'translate-x-0.5'
+                  }`} />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {/* Copies */}
+          <div className="flex items-center justify-between pt-2 border-t">
+            <label className="text-sm">Kopya Sayisi</label>
+            <div className="flex rounded-md border overflow-hidden">
+              {[1, 2, 3].map(n => (
+                <button
+                  key={n}
+                  onClick={() => updateReceipt({ copies: n })}
+                  className={`px-4 py-1.5 text-sm font-medium pos-btn ${
+                    receiptSettings.copies === n ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ Print Log ═══ */}
       {printLog.length > 0 && (
         <div className="rounded-lg border bg-card">
           <button
@@ -291,9 +514,7 @@ export default function PrinterSettings() {
                       {job.status === 'success' && <CheckCircle size={12} className="text-green-500" />}
                       {job.status === 'failed' && <XCircle size={12} className="text-red-500" />}
                       {(job.status === 'pending' || job.status === 'printing') && <Clock size={12} className="text-yellow-500" />}
-                      <span className="font-medium">
-                        {job.role === 'receipt' ? 'Kasa' : job.role === 'kitchen' ? 'Mutfak' : 'Bar'}
-                      </span>
+                      <span className="font-medium">{job.stationId}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       {job.status === 'success' && <span className="text-green-600">Basarili</span>}

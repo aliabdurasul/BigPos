@@ -9,6 +9,22 @@
 const W = 32;
 const SEP = '-'.repeat(W);
 
+function makeHelpers(width: number) {
+  const sep = '-'.repeat(width);
+  return {
+    sep,
+    center(text: string): string {
+      const pad = Math.max(0, Math.floor((width - text.length) / 2));
+      return ' '.repeat(pad) + text;
+    },
+    row(label: string, value: string): string {
+      const gap = width - label.length - value.length;
+      if (gap < 1) return label + ' ' + value;
+      return label + ' '.repeat(gap) + value;
+    },
+  };
+}
+
 function center(text: string): string {
   const pad = Math.max(0, Math.floor((W - text.length) / 2));
   return ' '.repeat(pad) + text;
@@ -237,7 +253,7 @@ export function formatGunSonu(data: GunSonuData): string {
 // Print helper — sends to QZ Tray if connected, else opens print window
 // ═══════════════════════════════════════
 
-export function printReceipt(text: string, title: string = 'Fis') {
+export function printReceipt(text: string, title: string = 'Fis', receiptStationId: string = 'receipt') {
   import('./qz-tray').then(({ getQZStatus }) => {
     if (getQZStatus() === 'connected') {
       import('./escpos').then(({ ESCPOSBuilder }) => {
@@ -248,7 +264,7 @@ export function printReceipt(text: string, title: string = 'Fis') {
           }
           b.cut();
           const fp = buildFingerprint('adisyon', Date.now().toString());
-          enqueue('receipt', b.build(), fp);
+          enqueue(receiptStationId, b.build(), fp);
         });
       });
     } else {

@@ -36,6 +36,7 @@ export default function CashierPOS() {
     orders, restaurantName, productModifierMap, markOrderReady,
     completePayment, recordPrepayment, payOrderItems, staffId,
     voidItem, returnItem, refundPayment, applyItemDiscount,
+    printerConfig,
   } = usePOS();
   const { session, logout } = useAuth();
   const staffName = session?.name || null;
@@ -277,7 +278,7 @@ export default function CashierPOS() {
         orderId: Date.now().toString(),
         items: newItems,
         restaurantName: restaurantName || 'RESTORAN',
-      });
+      }, printerConfig);
     }
 
     draftItemsRef.current.delete(selectedTable.id);
@@ -365,7 +366,7 @@ export default function CashierPOS() {
           orderIds: tableOrders.map(o => o.id),
           discountAmount,
           discountReason,
-        });
+        }, printerConfig);
       }
     } catch {
       toast.error('Ödeme işlemi başarısız');
