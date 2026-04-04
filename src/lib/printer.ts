@@ -83,7 +83,7 @@ export function printKitchenTicket(data: KitchenPrintData, config?: PrinterSetti
   const defaultPrepId = cfg.defaultPrepStationId || cfg.stations.find(s => s.purpose === 'prep' && s.isDefault)?.id || 'kitchen';
 
   const fp = buildFingerprint('kitchen', data.orderId);
-  const routed = routeItemsByCategory(data.items, defaultPrepId);
+  const routed = routeItemsByCategory(data.items, defaultPrepId, cfg.categoryRouting || {});
 
   for (const [stationId, items] of Object.entries(routed)) {
     if (items.length > 0) {
@@ -198,6 +198,76 @@ export function printPaymentReceipt(data: ReceiptPrintData, config?: PrinterSett
   for (let i = 0; i < copies; i++) {
     enqueue(receiptStationId, escpos, i === 0 ? fp : fp + `:copy${i}`);
   }
+}
+
+// ─── Adisyon Print ─────────────────────────────
+
+export interface AdisyonPrintData {
+  restaurantName: string;
+  tableName: string;
+  staffName: string;
+  items: { name: string; qty: number; unitPrice: number }[];
+  total: number;
+  paymentMethod?: string;
+  paidAmount?: number;
+  remainingAmount?: number;
+}
+
+function buildAdisyonESCPOS(data: AdisyonPrintData, settings?: ReceiptSettings): number[] {
+  const s = settings || DEFAULT_RECEIPT_SETTINGS;
+  const b = new ESCPOSBuilder(s.paperWidth);
+  const now = new Date();
+
+  b.centerOn();
+  if (s.showLogo && s.logoText) {
+    b.bold(true).text(s.logoText.toUpperCase()).bold(false);
+  } else {
+    b.bold(true).text(data.restaurantName.toUpperCase()).bold(false);
+  }
+  b.leftAlign();
+  b.text('');
+
+  b.separator();
+  b.row('Tarih:', fmtDate(now));
+  b.row('Saat:', fmtTime(now));
+  b.row('Masa:', data.tableName);
+  if (s.showStaffName) b.row('Garson:', data.staffName);
+  b.separator();
+
+  for (const item of data.items) {
+    const lineTotal = item.qty * item.unitPrice;
+    b.row(`${item.qty}x ${item.name}`, fmtTL(lineTotal));
+  }
+
+  b.separator();
+  b.bold(true).row('TOPLAM', fmtTL(data.total)).bold(false);
+
+  if (data.paymentMethod) {
+    b.row('Odeme:', data.paymentMethod);
+  }
+  if (data.paidAmount !== undefined && data.paidAmount > 0) {
+    b.row('Odenen:', fmtTL(data.paidAmount));
+  }
+  if (data.remainingAmount !== undefined && data.remainingAmount > 0) {
+    b.row('Kalan:', fmtTL(data.remainingAmount));
+  }
+
+  b.text('');
+  b.centerOn();
+  b.text(s.footerText || 'Tesekkur ederiz!');
+  b.leftAlign();
+  b.text('');
+  b.cut();
+
+  return b.build();
+}
+
+export function printAdisyon(data: AdisyonPrintData, config?: PrinterSettings): void {
+  const cfg = config || DEFAULT_PRINTER_SETTINGS;
+  const receiptStationId = cfg.stations.find(s => s.purpose === 'receipt')?.id || 'receipt';
+  const fp = buildFingerprint('adisyon', `${data.tableName}_${Date.now()}`);
+  const escpos = buildAdisyonESCPOS(data, cfg.receiptSettings);
+  enqueue(receiptStationId, escpos, fp);
 }
 
 // ─── Test Print ────────────────────────────────

@@ -1,8 +1,8 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { usePrinter } from '@/hooks/use-printer';
 import { usePOS } from '@/context/POSContext';
 import { testPrint } from '@/lib/printer';
-import { getCategoryRouting, setCategoryRoute, removeCategoryRoute } from '@/lib/qz-tray';
+import { getCategoryRouting, removeCategoryRoute, removePrinterForStation } from '@/lib/qz-tray';
 import { PrintStation, PrintStationPurpose, ReceiptSettings, DEFAULT_RECEIPT_SETTINGS } from '@/types/pos';
 import {
   Wifi, WifiOff, Loader2, Printer, RefreshCw, CheckCircle, XCircle,
@@ -17,8 +17,9 @@ function genId(): string {
 export default function PrinterSettings() {
   const { status, error, printers, assignments, printLog, connect, disconnect, refreshPrinters, assignPrinter, isQZLoaded } = usePrinter();
   const { categories, printerConfig, updatePrinterConfig } = usePOS();
-  const [routing, setRouting] = useState(getCategoryRouting());
+  const [routing, setRouting] = useState<Record<string, string>>(printerConfig.categoryRouting || {});
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showCategoryRouting, setShowCategoryRouting] = useState(false);
   const [testingStation, setTestingStation] = useState<string | null>(null);
   const [newStationName, setNewStationName] = useState('');
   const [newStationPurpose, setNewStationPurpose] = useState<PrintStationPurpose>('prep');
@@ -34,6 +35,22 @@ export default function PrinterSettings() {
   const stations = printerConfig.stations;
   const receiptSettings = printerConfig.receiptSettings || DEFAULT_RECEIPT_SETTINGS;
   const prepStations = stations.filter(s => s.purpose === 'prep' && s.active);
+
+  // Auto-create default Kasa + Mutfak stations on first setup
+  const didAutoCreate = useRef(false);
+  useEffect(() => {
+    if (stations.length === 0 && !didAutoCreate.current) {
+      didAutoCreate.current = true;
+      updatePrinterConfig({
+        ...printerConfig,
+        stations: [
+          { id: 'receipt', name: 'Kasa', purpose: 'receipt', isDefault: true, active: true },
+          { id: 'kitchen', name: 'Mutfak', purpose: 'prep', isDefault: true, active: true },
+        ],
+        defaultPrepStationId: 'kitchen',
+      });
+    }
+  }, [stations.length, printerConfig, updatePrinterConfig]);
 
   // ─── Station management ────────────────────────
 
@@ -52,7 +69,19 @@ export default function PrinterSettings() {
   };
 
   const removeStation = (id: string) => {
-    saveConfig({ stations: stations.filter(s => s.id !== id) });
+    // Clean up localStorage device binding
+    removePrinterForStation(id);
+    // Clean up category routing entries pointing to this station
+    const currentRouting = getCategoryRouting();
+    const newCategoryRouting = { ...printerConfig.categoryRouting };
+    for (const [catId, stationId] of Object.entries(currentRouting)) {
+      if (stationId === id) removeCategoryRoute(catId);
+    }
+    for (const [catId, stationId] of Object.entries(newCategoryRouting)) {
+      if (stationId === id) delete newCategoryRouting[catId];
+    }
+    setRouting(getCategoryRouting());
+    saveConfig({ stations: stations.filter(s => s.id !== id), categoryRouting: newCategoryRouting });
   };
 
   const setDefaultStation = (id: string) => {
@@ -70,27 +99,66 @@ export default function PrinterSettings() {
   // ─── Category routing ─────────────────────────
 
   const handleCategoryRoute = (catId: string, stationId: string) => {
-    if (stationId === '') {
-      removeCategoryRoute(catId);
-    } else {
-      setCategoryRoute(catId, stationId);
-    }
-    setRouting(getCategoryRouting());
-    // Also save to printerConfig for persistence
+    // Single source of truth: only save to Supabase printerConfig
     const newRouting = { ...printerConfig.categoryRouting };
     if (stationId === '') {
       delete newRouting[catId];
     } else {
       newRouting[catId] = stationId;
     }
+    setRouting(newRouting);
     saveConfig({ categoryRouting: newRouting });
   };
 
-  // ─── Receipt settings ─────────────────────────
+  // ─── Receipt settings (draft mode) ─────────────────────────
 
+  const [draftReceipt, setDraftReceipt] = useState<ReceiptSettings>(receiptSettings);
+  const receiptDirty = useMemo(() => JSON.stringify(draftReceipt) !== JSON.stringify(receiptSettings), [draftReceipt, receiptSettings]);
   const updateReceipt = (patch: Partial<ReceiptSettings>) => {
-    saveConfig({ receiptSettings: { ...receiptSettings, ...patch } });
+    setDraftReceipt(prev => ({ ...prev, ...patch }));
   };
+  const saveReceiptSettings = () => {
+    saveConfig({ receiptSettings: draftReceipt });
+  };
+  const resetReceiptSettings = () => {
+    setDraftReceipt(receiptSettings);
+  };
+
+  // Receipt preview generator
+  const receiptPreview = useMemo(() => {
+    const s = draftReceipt;
+    const w = s.paperWidth === 58 ? 32 : 48;
+    const sep = '-'.repeat(w);
+    const ctr = (t: string) => { const p = Math.max(0, Math.floor((w - t.length) / 2)); return ' '.repeat(p) + t; };
+    const rw = (l: string, v: string) => { const g = w - l.length - v.length; return g < 1 ? l + ' ' + v : l + ' '.repeat(g) + v; };
+    const lines: string[] = [];
+    const logo = s.showLogo ? (s.logoText || 'RESTORAN ADI').toUpperCase() : 'RESTORAN ADI';
+    if (s.fontSize === 'large') lines.push(ctr(`[ ${logo} ]`));
+    else lines.push(ctr(logo));
+    if (s.headerText) lines.push(ctr(s.headerText));
+    lines.push('');
+    lines.push(sep);
+    lines.push(rw('Tarih:', '04.04.2026'));
+    lines.push(rw('Saat:', '14:30'));
+    lines.push(rw('Masa:', 'Masa 5'));
+    if (s.showStaffName) lines.push(rw('Kasiyer:', 'Ali'));
+    lines.push(sep);
+    lines.push(rw('2x Adana Kebap', '240 TL'));
+    if (s.showModifiers) lines.push(rw('    + Acili', '+10 TL'));
+    lines.push(rw('1x Ayran', '25 TL'));
+    lines.push(rw('1x Baklava', '80 TL'));
+    lines.push(sep);
+    lines.push(rw('TOPLAM', '355 TL'));
+    if (s.showPaymentBreakdown) {
+      lines.push(sep.replace(/-/g, '.'));
+      lines.push(rw('Nakit', '200 TL'));
+      lines.push(rw('Kart', '155 TL'));
+    }
+    lines.push('');
+    lines.push(ctr(s.footerText || 'Tesekkur ederiz!'));
+    lines.push('');
+    return lines.join('\n');
+  }, [draftReceipt]);
 
   // ─── Test print ────────────────────────────────
 
@@ -334,43 +402,61 @@ export default function PrinterSettings() {
         </div>
       </div>
 
-      {/* ═══ Category Routing ═══ */}
+      {/* ═══ Category Routing (Advanced) ═══ */}
       {prepStations.length > 1 && categories.length > 0 && (
-        <div className="rounded-lg border bg-card p-5 space-y-4">
-          <div>
-            <h3 className="font-semibold text-sm">Kategori Yonlendirme</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Hangi kategorilerin hangi hazirlik noktasina gidecegini belirleyin
-            </p>
-          </div>
-          <div className="space-y-2">
-            {categories.map(cat => (
-              <div key={cat.id} className="flex items-center justify-between gap-3 py-2 border-b last:border-0">
-                <span className="text-sm font-medium truncate">{cat.icon ? `${cat.icon} ` : ''}{cat.name}</span>
-                <select
-                  value={routing[cat.id] || ''}
-                  onChange={e => handleCategoryRoute(cat.id, e.target.value)}
-                  className="w-48 border rounded-md px-2 py-1.5 text-sm bg-background"
-                >
-                  <option value="">Varsayilan</option>
-                  {prepStations.map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
+        <div className="rounded-lg border bg-card">
+          <button
+            onClick={() => setShowCategoryRouting(!showCategoryRouting)}
+            className="w-full flex items-center justify-between p-4 text-sm font-medium hover:bg-muted/50 pos-btn"
+          >
+            <span className="flex items-center gap-2">
+              {showCategoryRouting ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              Gelismis: Kategori Yonlendirme
+            </span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">Opsiyonel</span>
+          </button>
+          {showCategoryRouting && (
+            <div className="px-5 pb-5 space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Birden fazla hazirlik noktaniz varsa, hangi kategorilerin hangi noktaya gidecegini belirleyin. Varsayilan olarak tum siparisler varsayilan mutfak yazicisina gider.
+              </p>
+              <div className="space-y-2">
+                {categories.map(cat => (
+                  <div key={cat.id} className="flex items-center justify-between gap-3 py-2 border-b last:border-0">
+                    <span className="text-sm font-medium truncate">{cat.icon ? `${cat.icon} ` : ''}{cat.name}</span>
+                    <select
+                      value={routing[cat.id] || ''}
+                      onChange={e => handleCategoryRoute(cat.id, e.target.value)}
+                      className="w-48 border rounded-md px-2 py-1.5 text-sm bg-background"
+                    >
+                      <option value="">Varsayilan</option>
+                      {prepStations.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* ═══ Receipt Design Settings ═══ */}
       <div className="rounded-lg border bg-card p-5 space-y-4">
-        <div>
-          <h3 className="font-semibold text-sm">Fis Tasarimi</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Musteri fislerinin gorunumunu ayarlayin</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-sm">Fis Tasarimi</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Musteri fislerinin gorunumunu ayarlayin</p>
+          </div>
+          {receiptDirty && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-bold">Kaydedilmedi</span>
+          )}
         </div>
 
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Left: Settings controls */}
+          <div className="space-y-4">
           {/* Paper width */}
           <div className="flex items-center justify-between">
             <label className="text-sm">Kagit Genisligi</label>
@@ -380,7 +466,7 @@ export default function PrinterSettings() {
                   key={w}
                   onClick={() => updateReceipt({ paperWidth: w })}
                   className={`px-4 py-1.5 text-sm font-medium pos-btn ${
-                    receiptSettings.paperWidth === w ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                    draftReceipt.paperWidth === w ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
                   }`}
                 >
                   {w}mm
@@ -394,13 +480,13 @@ export default function PrinterSettings() {
             <div className="flex items-center justify-between">
               <label className="text-sm">Logo Metni</label>
               <label className="flex items-center gap-2 text-xs">
-                <input type="checkbox" checked={receiptSettings.showLogo} onChange={e => updateReceipt({ showLogo: e.target.checked })} className="rounded" />
+                <input type="checkbox" checked={draftReceipt.showLogo} onChange={e => updateReceipt({ showLogo: e.target.checked })} className="rounded" />
                 Goster
               </label>
             </div>
-            {receiptSettings.showLogo && (
+            {draftReceipt.showLogo && (
               <input
-                value={receiptSettings.logoText || ''}
+                value={draftReceipt.logoText || ''}
                 onChange={e => updateReceipt({ logoText: e.target.value })}
                 placeholder="Restoran adi kullanilir"
                 className="w-full border rounded-md px-3 py-2 text-sm bg-background"
@@ -412,7 +498,7 @@ export default function PrinterSettings() {
           <div className="space-y-1">
             <label className="text-sm">Baslik Metni</label>
             <input
-              value={receiptSettings.headerText || ''}
+              value={draftReceipt.headerText || ''}
               onChange={e => updateReceipt({ headerText: e.target.value })}
               placeholder="Opsiyonel baslik satiri"
               className="w-full border rounded-md px-3 py-2 text-sm bg-background"
@@ -423,7 +509,7 @@ export default function PrinterSettings() {
           <div className="space-y-1">
             <label className="text-sm">Alt Bilgi</label>
             <input
-              value={receiptSettings.footerText}
+              value={draftReceipt.footerText}
               onChange={e => updateReceipt({ footerText: e.target.value })}
               placeholder="Tesekkur ederiz!"
               className="w-full border rounded-md px-3 py-2 text-sm bg-background"
@@ -439,7 +525,7 @@ export default function PrinterSettings() {
                   key={fs}
                   onClick={() => updateReceipt({ fontSize: fs })}
                   className={`px-4 py-1.5 text-sm font-medium pos-btn ${
-                    receiptSettings.fontSize === fs ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                    draftReceipt.fontSize === fs ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
                   }`}
                 >
                   {fs === 'normal' ? 'Normal' : 'Buyuk'}
@@ -459,13 +545,13 @@ export default function PrinterSettings() {
               <div key={key} className="flex items-center justify-between">
                 <label className="text-sm">{label}</label>
                 <button
-                  onClick={() => updateReceipt({ [key]: !receiptSettings[key] })}
+                  onClick={() => updateReceipt({ [key]: !draftReceipt[key] })}
                   className={`w-10 h-6 rounded-full transition-colors relative pos-btn ${
-                    receiptSettings[key] ? 'bg-primary' : 'bg-muted-foreground/30'
+                    draftReceipt[key] ? 'bg-primary' : 'bg-muted-foreground/30'
                   }`}
                 >
                   <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                    receiptSettings[key] ? 'translate-x-4' : 'translate-x-0.5'
+                    draftReceipt[key] ? 'translate-x-4' : 'translate-x-0.5'
                   }`} />
                 </button>
               </div>
@@ -481,7 +567,7 @@ export default function PrinterSettings() {
                   key={n}
                   onClick={() => updateReceipt({ copies: n })}
                   className={`px-4 py-1.5 text-sm font-medium pos-btn ${
-                    receiptSettings.copies === n ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                    draftReceipt.copies === n ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
                   }`}
                 >
                   {n}
@@ -489,7 +575,36 @@ export default function PrinterSettings() {
               ))}
             </div>
           </div>
+          </div>
+
+          {/* Right: Live Preview */}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Onizleme</p>
+            <div className={`mx-auto bg-white text-black rounded-md shadow-inner border p-3 ${
+              draftReceipt.paperWidth === 58 ? 'max-w-[240px]' : 'max-w-[340px]'
+            }`}>
+              <pre className="text-[10px] leading-[14px] font-mono whitespace-pre overflow-x-auto">{receiptPreview}</pre>
+            </div>
+          </div>
         </div>
+
+        {/* Save / Reset buttons */}
+        {receiptDirty && (
+          <div className="flex items-center gap-2 pt-3 border-t">
+            <button
+              onClick={saveReceiptSettings}
+              className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:opacity-90 font-bold pos-btn"
+            >
+              Kaydet
+            </button>
+            <button
+              onClick={resetReceiptSettings}
+              className="px-4 py-2 text-sm border rounded-md hover:bg-muted font-medium pos-btn"
+            >
+              Sifirla
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ═══ Print Log ═══ */}

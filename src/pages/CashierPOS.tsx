@@ -5,9 +5,8 @@ import { OrderItem, Table, MenuItem, OrderItemModifier } from '@/types/pos';
 import { ArrowLeft, LogOut, Clock, AlertTriangle, ShoppingCart, Banknote } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { formatAdisyon, printReceipt } from '@/lib/receipt';
 import { playSuccess } from '@/lib/sound';
-import { printKitchenTicket, printPaymentReceipt } from '@/lib/printer';
+import { printKitchenTicket, printPaymentReceipt, printAdisyon } from '@/lib/printer';
 import { getQZStatus } from '@/lib/qz-tray';
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -299,24 +298,20 @@ export default function CashierPOS() {
     if (selectedTable) draftItemsRef.current.delete(selectedTable.id);
   };
 
-  const printAdisyon = () => {
+  const printAdisyonHandler = () => {
     if (!selectedTable || orderItems.length === 0) return;
     const items = orderItems.map(i => ({
       name: i.menuItem.name,
       qty: i.quantity,
       unitPrice: i.menuItem.price + i.modifiers.reduce((s, m) => s + m.extraPrice, 0),
     }));
-    printReceipt(
-      formatAdisyon({
-        restaurantName: restaurantName || 'RESTORAN',
-        tableName: selectedTable.name,
-        staffName: staffName || '',
-        date: new Date(),
-        items,
-        total,
-      }),
-      'Adisyon'
-    );
+    printAdisyon({
+      restaurantName: restaurantName || 'RESTORAN',
+      tableName: selectedTable.name,
+      staffName: staffName || '',
+      items,
+      total,
+    }, printerConfig);
   };
 
   const handleMarkReady = async () => {
@@ -505,7 +500,7 @@ export default function CashierPOS() {
     onEditNote: handleEditNote,
     onSaveNote: handleSaveNote,
     onEditNoteTextChange: setEditNoteText,
-    onPrintAdisyon: printAdisyon,
+    onPrintAdisyon: printAdisyonHandler,
     onUpdateQty: handleUpdateQty,
     onRemoveItem: handleRemoveItem,
     onToggleIkram: (id: string) => {
@@ -738,7 +733,7 @@ export default function CashierPOS() {
               onPrepayment={handlePrepayment}
               onPayOrderItems={handlePayOrderItems}
               onMarkReady={handleMarkReady}
-              onPrintAdisyon={printAdisyon}
+              onPrintAdisyon={printAdisyonHandler}
             />
           </div>
         </div>

@@ -5,7 +5,7 @@ import { OrderItem, Table, MenuItem, OrderItemModifier } from '@/types/pos';
 import { ArrowLeft, Clock, LogOut, AlertTriangle, ShoppingCart } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { formatAdisyon, printReceipt } from '@/lib/receipt';
+import { printAdisyon as printAdisyonFn } from '@/lib/printer';
 import { playSuccess } from '@/lib/sound';
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -31,6 +31,7 @@ export default function GarsonPOS() {
     tables, categories, menuItems, addOrder, getTableOrders,
     setTableTotal, openTable, modifierGroups, floors,
     orders, restaurantName, productModifierMap, markOrderReady,
+    printerConfig,
   } = usePOS();
   const { session, logout } = useAuth();
   const staffName = session?.name || null;
@@ -257,17 +258,13 @@ export default function GarsonPOS() {
       qty: i.quantity,
       unitPrice: i.menuItem.price + i.modifiers.reduce((s, m) => s + m.extraPrice, 0),
     }));
-    printReceipt(
-      formatAdisyon({
-        restaurantName: restaurantName || 'RESTORAN',
-        tableName: selectedTable.name,
-        staffName: staffName || '',
-        date: new Date(),
-        items,
-        total,
-      }),
-      'Adisyon'
-    );
+    printAdisyonFn({
+      restaurantName: restaurantName || 'RESTORAN',
+      tableName: selectedTable.name,
+      staffName: staffName || '',
+      items,
+      total,
+    }, printerConfig);
   };
 
   const handleMarkReady = async () => {

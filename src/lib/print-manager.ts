@@ -1,13 +1,14 @@
 /**
  * Print Manager — production-grade print queue with:
- * - Sequential processing (prevents garbled concurrent prints)
+ * - Per-station parallel queues (different printers don't block each other)
+ * - Sequential processing within each station (prevents garbled prints)
  * - Retry with exponential backoff (3 attempts)
  * - Fingerprint-based deduplication (10s TTL)
  * - Print job status tracking with listener pattern
  * - Category-based item routing to kitchen/bar printers
  */
 
-import { printRaw, getCategoryRouting } from './qz-tray';
+import { printRaw } from './qz-tray';
 
 // ─── Types ─────────────────────────────────────
 
@@ -33,10 +34,10 @@ const BASE_DELAY_MS = 1000; // 1s, 2s, 4s exponential
 const DEDUP_TTL_MS = 10_000;
 const MAX_LOG_SIZE = 200;
 
-// ─── State ─────────────────────────────────────
+// ─── State (per-station queues) ────────────────
 
-const _queue: PrintJob[] = [];
-let _processing = false;
+const _queues = new Map<string, PrintJob[]>();
+const _processing = new Set<string>(); // stations currently processing
 const _log: PrintJob[] = [];
 const _logListeners: Array<(log: PrintJob[]) => void> = [];
 const _recentFingerprints = new Map<string, number>(); // fingerprint → timestamp
@@ -84,14 +85,17 @@ export function onPrintLogChange(fn: (log: PrintJob[]) => void): () => void {
   };
 }
 
-// ─── Queue processing ──────────────────────────
+// ─── Queue processing (per-station) ────────────
 
-async function processQueue() {
-  if (_processing) return;
-  _processing = true;
+async function processStationQueue(stationId: string) {
+  if (_processing.has(stationId)) return;
+  _processing.add(stationId);
 
-  while (_queue.length > 0) {
-    const job = _queue[0];
+  const queue = _queues.get(stationId);
+  if (!queue) { _processing.delete(stationId); return; }
+
+  while (queue.length > 0) {
+    const job = queue[0];
     job.status = 'printing';
     pushLog(job);
 
@@ -105,7 +109,6 @@ async function processQueue() {
       } catch (err) {
         job.error = err instanceof Error ? err.message : String(err);
         if (attempt < job.maxAttempts) {
-          // Exponential backoff: 1s, 2s, 4s
           await sleep(BASE_DELAY_MS * Math.pow(2, attempt - 1));
         }
       }
@@ -115,15 +118,15 @@ async function processQueue() {
     job.status = success ? 'success' : 'failed';
     pushLog(job);
 
-    // Record fingerprint on success to prevent immediate re-print
     if (success) {
       recordFingerprint(job.fingerprint);
     }
 
-    _queue.shift();
+    queue.shift();
   }
 
-  _processing = false;
+  _queues.delete(stationId);
+  _processing.delete(stationId);
 }
 
 function sleep(ms: number): Promise<void> {
@@ -134,13 +137,13 @@ function sleep(ms: number): Promise<void> {
 
 /**
  * Enqueue a print job. Returns false if deduplicated (skipped).
+ * Each station has its own queue — different printers process in parallel.
  */
 export function enqueue(
   stationId: string,
   data: number[],
   fingerprint: string,
 ): boolean {
-  // Dedup check
   if (isDuplicate(fingerprint)) {
     console.log(`[PrintManager] Dedup skip: ${fingerprint}`);
     return false;
@@ -157,9 +160,10 @@ export function enqueue(
     createdAt: new Date(),
   };
 
-  _queue.push(job);
+  if (!_queues.has(stationId)) _queues.set(stationId, []);
+  _queues.get(stationId)!.push(job);
   pushLog(job);
-  processQueue(); // fire-and-forget, sequential processing guaranteed
+  processStationQueue(stationId); // fire-and-forget, sequential within station
 
   return true;
 }
@@ -167,18 +171,18 @@ export function enqueue(
 // ─── Category routing helper ───────────────────
 
 /**
- * Split items by category → stationId using the routing config.
+ * Split items by category → stationId using the provided routing config.
  * Items whose category has no routing go to `defaultStationId`.
  */
 export function routeItemsByCategory<T extends { menuItem: { categoryId: string } }>(
   items: T[],
   defaultStationId: string,
+  categoryRouting: Record<string, string> = {},
 ): Record<string, T[]> {
-  const routing = getCategoryRouting();
   const result: Record<string, T[]> = {};
 
   for (const item of items) {
-    const stationId = routing[item.menuItem.categoryId] || defaultStationId;
+    const stationId = categoryRouting[item.menuItem.categoryId] || defaultStationId;
     if (!result[stationId]) result[stationId] = [];
     result[stationId].push(item);
   }
