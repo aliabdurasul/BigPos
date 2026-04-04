@@ -26,6 +26,7 @@ const ROUTING_KEY = 'bigpos_category_routing';
 // ─── State ─────────────────────────────────────
 
 let _status: QZConnectionStatus = 'disconnected';
+let _lastError: string | null = null;
 const _listeners: Array<(s: QZConnectionStatus) => void> = [];
 
 function setStatus(s: QZConnectionStatus) {
@@ -35,6 +36,14 @@ function setStatus(s: QZConnectionStatus) {
 
 export function getQZStatus(): QZConnectionStatus {
   return _status;
+}
+
+export function getQZError(): string | null {
+  return _lastError;
+}
+
+export function isQZLoaded(): boolean {
+  return typeof qz !== 'undefined' && !!qz?.websocket;
 }
 
 export function onQZStatusChange(fn: (s: QZConnectionStatus) => void): () => void {
@@ -47,12 +56,17 @@ export function onQZStatusChange(fn: (s: QZConnectionStatus) => void): () => voi
 
 // ─── Connection ────────────────────────────────
 
+const CONNECT_TIMEOUT_MS = 10_000;
+
 function isQZAvailable(): boolean {
-  return typeof qz !== 'undefined' && qz?.websocket;
+  return typeof qz !== 'undefined' && !!qz?.websocket;
 }
 
 export async function connectQZ(): Promise<void> {
+  _lastError = null;
+
   if (!isQZAvailable()) {
+    _lastError = 'QZ Tray kutuphanesi yuklenemedi. Sayfayi yenileyin.';
     console.warn('[QZ] qz-tray.js not loaded');
     setStatus('error');
     return;
@@ -63,14 +77,24 @@ export async function connectQZ(): Promise<void> {
   }
   setStatus('connecting');
   try {
-    // Skip certificate signing for local dev — QZ Tray allows unsigned in localhost
+    // Enable verbose QZ websocket logging in browser console
+    if (qz.api?.showDebug) qz.api.showDebug(true);
+
+    // Certificate: empty = unsigned. QZ Tray will show a trust dialog on non-localhost origins.
     qz.security.setCertificatePromise(() =>
-      Promise.resolve('') // unsigned / self-signed
+      Promise.resolve('')
     );
     qz.security.setSignatureAlgorithm('SHA512');
     qz.security.setSignaturePromise(() => (resolve: (v: string) => void) => resolve(''));
 
-    await qz.websocket.connect();
+    // Race connection against timeout
+    const connectPromise = qz.websocket.connect({ retries: 3, delay: 1 });
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('__TIMEOUT__')), CONNECT_TIMEOUT_MS)
+    );
+
+    await Promise.race([connectPromise, timeoutPromise]);
+    _lastError = null;
     setStatus('connected');
 
     qz.websocket.setClosedCallbacks(() => {
@@ -81,7 +105,16 @@ export async function connectQZ(): Promise<void> {
       }, 5000);
     });
   } catch (err) {
-    console.error('[QZ] Connection failed:', err);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[QZ] Connection failed:', msg);
+
+    if (msg === '__TIMEOUT__') {
+      _lastError = 'Baglanti zaman asimina ugradi. QZ Tray programinin arka planda calistigindan emin olun.';
+    } else if (msg.includes('Unable to establish')) {
+      _lastError = 'QZ Tray programi bulunamadi. Programin bilgisayarda kurulu ve acik oldugunu kontrol edin.';
+    } else {
+      _lastError = `Baglanti basarisiz: ${msg}`;
+    }
     setStatus('error');
   }
 }

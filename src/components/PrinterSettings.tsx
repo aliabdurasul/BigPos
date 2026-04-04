@@ -15,7 +15,7 @@ const ROLES: { key: PrinterRole; label: string; desc: string }[] = [
 ];
 
 export default function PrinterSettings() {
-  const { status, printers, assignments, printLog, connect, disconnect, refreshPrinters, assignPrinter } = usePrinter();
+  const { status, error, printers, assignments, printLog, connect, disconnect, refreshPrinters, assignPrinter, isQZLoaded } = usePrinter();
   const { categories } = usePOS();
   const [routing, setRouting] = useState(getCategoryRouting());
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -51,7 +51,7 @@ export default function PrinterSettings() {
   const hasKitchen = !!assignments.kitchen;
 
   const steps = [
-    { done: true, label: 'QZ Tray bilgisayara yuklu', visible: true },
+    { done: isQZLoaded, label: isQZLoaded ? 'QZ Tray kutuphanesi yuklendi' : 'QZ Tray kutuphanesi yuklenemedi — sayfayi yenileyin', visible: true },
     { done: isConnected, label: 'QZ Tray baglantisi kuruldu', visible: true },
     { done: hasPrinters, label: 'Yazici bulundu', visible: isConnected },
     { done: hasReceipt, label: 'Kasa fisi yazicisi secildi', visible: hasPrinters },
@@ -112,6 +112,14 @@ export default function PrinterSettings() {
             <button onClick={disconnect} className="px-4 py-2 text-sm border rounded-md hover:bg-muted font-medium pos-btn">
               Baglatiyi Kes
             </button>
+          ) : status === 'error' ? (
+            <button
+              onClick={connect}
+              className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:opacity-90 font-bold pos-btn flex items-center gap-2"
+            >
+              <RefreshCw size={14} />
+              Tekrar Dene
+            </button>
           ) : (
             <button
               onClick={connect}
@@ -124,8 +132,30 @@ export default function PrinterSettings() {
           )}
         </div>
 
-        {/* Help text when not connected */}
-        {!isConnected && status !== 'connecting' && (
+        {/* Connecting state — show hint about QZ permission dialog */}
+        {status === 'connecting' && (
+          <div className="rounded-md bg-blue-50 dark:bg-blue-950/30 p-3 flex items-start gap-2">
+            <Loader2 className="w-4 h-4 text-blue-500 mt-0.5 shrink-0 animate-spin" />
+            <div className="text-xs space-y-1">
+              <p className="font-semibold text-foreground">Baglanti kuruluyor...</p>
+              <p className="text-muted-foreground">QZ Tray ekraninda izin istegi cikarsa &quot;Izin Ver&quot; basin. Yaklasik 10 saniye icinde baglanmazsa otomatik iptal edilecek.</p>
+            </div>
+          </div>
+        )}
+
+        {/* Error state — show specific error message */}
+        {status === 'error' && error && (
+          <div className="rounded-md bg-red-50 dark:bg-red-950/30 p-3 flex items-start gap-2">
+            <XCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+            <div className="text-xs space-y-1">
+              <p className="font-semibold text-red-700 dark:text-red-400">{error}</p>
+              <p className="text-muted-foreground">QZ Tray programini kontrol edin ve &quot;Tekrar Dene&quot; butonuna basin.</p>
+            </div>
+          </div>
+        )}
+
+        {/* Help text when not connected and not connecting */}
+        {!isConnected && status !== 'connecting' && status !== 'error' && (
           <div className="rounded-md bg-muted/50 p-4 space-y-2">
             <div className="flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
