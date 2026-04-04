@@ -2,12 +2,13 @@ import { useState, useMemo } from 'react';
 import { usePOS } from '@/context/POSContext';
 import { useAuth } from '@/context/AuthContext';
 import { MenuItem, Staff, ModifierGroup } from '@/types/pos';
-import { ArrowLeft, Plus, Trash2, UtensilsCrossed, Grid3X3, Tag, Users, Store, BarChart3, Edit3, X, Layers, LogOut, Settings2, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, UtensilsCrossed, Grid3X3, Tag, Users, Store, BarChart3, Edit3, X, Layers, LogOut, Settings2, ChevronDown, ChevronRight, Printer } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import AdminDashboard from '@/components/AdminDashboard';
+import PrinterSettings from '@/components/PrinterSettings';
 
-type Tab = 'raporlar' | 'menu' | 'kategori' | 'modifierler' | 'masa' | 'personel' | 'katlar';
+type Tab = 'raporlar' | 'menu' | 'kategori' | 'modifierler' | 'masa' | 'personel' | 'katlar' | 'yazicilar';
 
 const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'raporlar', label: 'Raporlar', icon: <BarChart3 className="w-5 h-5" /> },
@@ -17,6 +18,7 @@ const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'masa', label: 'Masalar', icon: <Grid3X3 className="w-5 h-5" /> },
   { id: 'katlar', label: 'Katlar', icon: <Layers className="w-5 h-5" /> },
   { id: 'personel', label: 'Personel', icon: <Users className="w-5 h-5" /> },
+  { id: 'yazicilar', label: 'Yazicilar', icon: <Printer className="w-5 h-5" /> },
 ];
 
 export default function RestoranAdmin() {
@@ -458,6 +460,8 @@ export default function RestoranAdmin() {
               </div>
             </div>
           )}
+
+          {activeTab === 'yazicilar' && <PrinterSettings />}
         </div>
       </div>
 
