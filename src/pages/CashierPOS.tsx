@@ -7,6 +7,8 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { formatAdisyon, printReceipt } from '@/lib/receipt';
 import { playSuccess } from '@/lib/sound';
+import { printKitchenTicket, printPaymentReceipt } from '@/lib/printer';
+import { getQZStatus } from '@/lib/qz-tray';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 import TableGrid from '@/components/waiter/TableGrid';
@@ -266,6 +268,18 @@ export default function CashierPOS() {
     setTableTotal(selectedTable.id, total);
     toast.success('Sipariş mutfağa gönderildi!');
     playSuccess();
+
+    // Auto-print kitchen ticket if QZ Tray is connected
+    if (getQZStatus() === 'connected') {
+      printKitchenTicket({
+        tableName: selectedTable.name,
+        staffName: staffName || undefined,
+        orderId: Date.now().toString(),
+        items: newItems,
+        restaurantName: restaurantName || 'RESTORAN',
+      });
+    }
+
     draftItemsRef.current.delete(selectedTable.id);
     // Reload sent items from DB
     const existingOrders = getTableOrders(selectedTable.id);
@@ -336,6 +350,23 @@ export default function CashierPOS() {
         : `${amount} ₺ ödeme tamamlandı — ${selectedTable?.name} kapatıldı`
       );
       playSuccess();
+
+      // Auto-print payment receipt if table fully paid and QZ connected
+      if (remaining.length === 0 && getQZStatus() === 'connected') {
+        const allItems = tableOrders.flatMap(o => o.items);
+        const allPayments = tableOrders.flatMap(o => o.payments || []);
+        printPaymentReceipt({
+          restaurantName: restaurantName || 'RESTORAN',
+          tableName: selectedTable?.name || '',
+          staffName: staffName || undefined,
+          items: allItems,
+          total: total,
+          payments: [...allPayments, { id: '', orderId: targetOrder.id, amount, method: method as any, type: 'payment' as const, createdAt: new Date() }],
+          orderIds: tableOrders.map(o => o.id),
+          discountAmount,
+          discountReason,
+        });
+      }
     } catch {
       toast.error('Ödeme işlemi başarısız');
     } finally {
