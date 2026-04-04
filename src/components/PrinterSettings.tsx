@@ -1,13 +1,13 @@
-import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { usePrinter } from '@/hooks/use-printer';
 import { usePOS } from '@/context/POSContext';
 import { testPrint } from '@/lib/printer';
-import { getCategoryRouting, removeCategoryRoute, removePrinterForStation } from '@/lib/qz-tray';
+import { removeCategoryRoute, removePrinterForStation } from '@/lib/qz-tray';
 import { PrintStation, PrintStationPurpose, ReceiptSettings, DEFAULT_RECEIPT_SETTINGS } from '@/types/pos';
 import {
   Wifi, WifiOff, Loader2, Printer, RefreshCw, CheckCircle, XCircle,
   Clock, ChevronDown, ChevronRight, Download, AlertCircle, Info,
-  Plus, Trash2,
+  Plus, Trash2, Pencil, Check, X,
 } from 'lucide-react';
 
 function genId(): string {
@@ -24,17 +24,20 @@ export default function PrinterSettings() {
   const [newStationName, setNewStationName] = useState('');
   const [newStationPurpose, setNewStationPurpose] = useState<PrintStationPurpose>('prep');
 
-  // Debounced save
-  const saveTimer = useRef<ReturnType<typeof setTimeout>>();
-  const saveConfig = useCallback((partial: Partial<typeof printerConfig>) => {
-    const next = { ...printerConfig, ...partial };
-    clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => updatePrinterConfig(next), 500);
-  }, [printerConfig, updatePrinterConfig]);
-
   const stations = printerConfig.stations;
   const receiptSettings = printerConfig.receiptSettings || DEFAULT_RECEIPT_SETTINGS;
   const prepStations = stations.filter(s => s.purpose === 'prep' && s.active);
+
+  // ─── Draft stations (explicit save) ────────────────
+  const [draftStations, setDraftStations] = useState<PrintStation[]>(stations);
+  const stationsDirty = useMemo(() => JSON.stringify(draftStations) !== JSON.stringify(stations), [draftStations, stations]);
+  const stationsJson = JSON.stringify(stations);
+  useEffect(() => { setDraftStations(JSON.parse(stationsJson)); }, [stationsJson]);
+
+  // Inline edit state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editPurpose, setEditPurpose] = useState<PrintStationPurpose>('prep');
 
   // Auto-create default Kasa + Mutfak stations on first setup
   const didAutoCreate = useRef(false);
@@ -61,40 +64,49 @@ export default function PrinterSettings() {
       id: genId(),
       name,
       purpose: newStationPurpose,
-      isDefault: newStationPurpose === 'receipt' ? !stations.some(s => s.purpose === 'receipt') : !stations.some(s => s.purpose === 'prep' && s.isDefault),
+      isDefault: newStationPurpose === 'receipt' ? !draftStations.some(s => s.purpose === 'receipt') : !draftStations.some(s => s.purpose === 'prep' && s.isDefault),
       active: true,
     };
-    saveConfig({ stations: [...stations, station] });
+    setDraftStations(prev => [...prev, station]);
     setNewStationName('');
   };
 
   const removeStation = (id: string) => {
-    // Clean up localStorage device binding
-    removePrinterForStation(id);
-    // Clean up category routing entries pointing to this station
-    const currentRouting = getCategoryRouting();
-    const newCategoryRouting = { ...printerConfig.categoryRouting };
-    for (const [catId, stationId] of Object.entries(currentRouting)) {
-      if (stationId === id) removeCategoryRoute(catId);
-    }
-    for (const [catId, stationId] of Object.entries(newCategoryRouting)) {
-      if (stationId === id) delete newCategoryRouting[catId];
-    }
-    setRouting(getCategoryRouting());
-    saveConfig({ stations: stations.filter(s => s.id !== id), categoryRouting: newCategoryRouting });
+    setDraftStations(prev => prev.filter(s => s.id !== id));
   };
 
   const setDefaultStation = (id: string) => {
-    const target = stations.find(s => s.id === id);
+    const target = draftStations.find(s => s.id === id);
     if (!target) return;
-    const updated = stations.map(s => ({
+    setDraftStations(prev => prev.map(s => ({
       ...s,
       isDefault: s.purpose === target.purpose ? s.id === id : s.isDefault,
-    }));
-    const patch: Partial<typeof printerConfig> = { stations: updated };
-    if (target.purpose === 'prep') patch.defaultPrepStationId = id;
-    saveConfig(patch);
+    })));
   };
+
+  const saveStations = () => {
+    const removedIds = stations.filter(s => !draftStations.some(d => d.id === s.id)).map(s => s.id);
+    for (const id of removedIds) removePrinterForStation(id);
+    const newCategoryRouting = { ...printerConfig.categoryRouting };
+    for (const [catId, stationId] of Object.entries(newCategoryRouting)) {
+      if (removedIds.includes(stationId)) { delete newCategoryRouting[catId]; removeCategoryRoute(catId); }
+    }
+    const prepDraft = draftStations.filter(s => s.purpose === 'prep');
+    const defaultPrep = prepDraft.find(s => s.isDefault)?.id || prepDraft[0]?.id;
+    updatePrinterConfig({ ...printerConfig, stations: draftStations, categoryRouting: newCategoryRouting, defaultPrepStationId: defaultPrep });
+    setRouting(newCategoryRouting);
+    setEditingId(null);
+  };
+
+  const resetStations = () => { setDraftStations(stations); setEditingId(null); };
+
+  const startEdit = (s: PrintStation) => { setEditingId(s.id); setEditName(s.name); setEditPurpose(s.purpose); };
+  const confirmEdit = () => {
+    if (!editingId || !editName.trim()) return;
+    setDraftStations(prev => prev.map(s => s.id === editingId ? { ...s, name: editName.trim(), purpose: editPurpose } : s));
+    setEditingId(null);
+  };
+  const cancelEdit = () => setEditingId(null);
 
   // ─── Category routing ─────────────────────────
 
@@ -107,7 +119,7 @@ export default function PrinterSettings() {
       newRouting[catId] = stationId;
     }
     setRouting(newRouting);
-    saveConfig({ categoryRouting: newRouting });
+    updatePrinterConfig({ ...printerConfig, categoryRouting: newRouting });
   };
 
   // ─── Receipt settings (draft mode) ─────────────────────────
@@ -118,7 +130,7 @@ export default function PrinterSettings() {
     setDraftReceipt(prev => ({ ...prev, ...patch }));
   };
   const saveReceiptSettings = () => {
-    saveConfig({ receiptSettings: draftReceipt });
+    updatePrinterConfig({ ...printerConfig, receiptSettings: draftReceipt });
   };
   const resetReceiptSettings = () => {
     setDraftReceipt(receiptSettings);
@@ -311,16 +323,33 @@ export default function PrinterSettings() {
 
       {/* ═══ Print Stations ═══ */}
       <div className="rounded-lg border bg-card p-5 space-y-4">
-        <div>
-          <h3 className="font-semibold text-sm">Yazdirma Noktalari</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Yazdirma noktasi ekleyin ve her birine yazici atayin</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-sm">Yazdirma Noktalari</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Yazdirma noktasi ekleyin ve her birine yazici atayin</p>
+          </div>
+          {stationsDirty && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-bold">Kaydedilmedi</span>
+          )}
         </div>
 
         {/* Existing stations */}
         <div className="space-y-3">
-          {stations.map(station => (
+          {draftStations.map(station => (
             <div key={station.id} className="rounded-md border p-4 space-y-2">
               <div className="flex items-center justify-between">
+                {editingId === station.id ? (
+                  <div className="flex items-center gap-2 flex-1 mr-2">
+                    <input value={editName} onChange={e => setEditName(e.target.value)} onKeyDown={e => e.key === 'Enter' && confirmEdit()} className="flex-1 border rounded-md px-2 py-1 text-sm bg-background" autoFocus />
+                    <select value={editPurpose} onChange={e => setEditPurpose(e.target.value as PrintStationPurpose)} className="w-28 border rounded-md px-2 py-1 text-sm bg-background">
+                      <option value="prep">Hazirlik</option>
+                      <option value="receipt">Kasa</option>
+                    </select>
+                    <button onClick={confirmEdit} className="p-1.5 rounded hover:bg-green-50 text-green-600 pos-btn"><Check size={14} /></button>
+                    <button onClick={cancelEdit} className="p-1.5 rounded hover:bg-muted text-muted-foreground pos-btn"><X size={14} /></button>
+                  </div>
+                ) : (
+                <>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold">{station.name}</span>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
@@ -333,6 +362,7 @@ export default function PrinterSettings() {
                   )}
                 </div>
                 <div className="flex items-center gap-1">
+                  <button onClick={() => startEdit(station)} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground pos-btn"><Pencil size={14} /></button>
                   {!station.isDefault && (
                     <button onClick={() => setDefaultStation(station.id)} className="text-[10px] px-2 py-1 rounded border hover:bg-muted pos-btn">
                       Varsayilan Yap
@@ -342,6 +372,8 @@ export default function PrinterSettings() {
                     <Trash2 size={14} />
                   </button>
                 </div>
+                </>
+                )}
               </div>
 
               {/* Printer assignment (when connected) */}
@@ -400,6 +432,14 @@ export default function PrinterSettings() {
             <Plus size={14} /> Ekle
           </button>
         </div>
+
+        {/* Save / Reset station buttons */}
+        {stationsDirty && (
+          <div className="flex items-center gap-2 pt-3 border-t">
+            <button onClick={saveStations} className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:opacity-90 font-bold pos-btn">Kaydet</button>
+            <button onClick={resetStations} className="px-4 py-2 text-sm border rounded-md hover:bg-muted font-medium pos-btn">Sifirla</button>
+          </div>
+        )}
       </div>
 
       {/* ═══ Category Routing (Advanced) ═══ */}
