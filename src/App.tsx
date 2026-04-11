@@ -2,10 +2,11 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider, ProtectedRoute } from "@/context/AuthContext";
 import { useAuth } from "@/context/AuthContext";
 import { POSProvider } from "@/context/POSContext";
+import LandingPage from "./pages/LandingPage";
 import POSEntry from "./pages/POSEntry";
 import AdminLogin from "./pages/AdminLogin";
 import StaffLogin from "./pages/StaffLogin";
@@ -37,7 +38,7 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <Routes>
-            <Route path="/" element={<Navigate to="/pos" replace />} />
+            <Route path="/" element={<LandingPage />} />
             <Route path="/pos" element={<POSEntry />} />
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route path="/pos/:slug" element={<StaffLogin />} />
