@@ -1,30 +1,30 @@
 import { useState, useEffect, useRef } from "react";
 
-/* ─────────────────────────────────────────────────
-   SEO METADATA (injected via <head> at build time)
-   ─────────────────────────────────────────────────
-   Meta Title   : Restoran Yönetim Sistemi | Sıfır Kurulum, Anında Çalışır – RMS
-   Meta Desc    : Türkiye'nin en hızlı restoran yazılımı. Teknikersize, IP ayarı
-                  yok — cihazı tak, sistem devreye girer. QR menü, akıllı POS,
-                  mutfak ekranı. Ücretsiz deneyin.
-   Keywords     : restoran yönetim sistemi, QR menü sistemi, restoran POS sistemi,
-                  otomatik kurulum POS, bulut restoran yazılımı, restoran yazılımı,
-                  yemek sipariş sistemi, mutfak ekranı, self servis menü,
-                  restoran otomasyon sistemi
+/* ═══════════════════════════════════════════════════════
+   SEO METADATA
+   ═══════════════════════════════════════════════════════
+   Meta Title   : RMS – Telefonda Çalışan Restoran İşletim Sistemi | Kurulum Yok
+   Meta Desc    : Garson telefonuyla sipariş al, mutfak anlık görsün, kurye takip
+                  et — kurulum yok, tekniker yok, uygulama yok. Sadece tarayıcı.
+                  Her cihazda, hemen şimdi. Ücretsiz deneyin.
+   Keywords     : mobil restoran sistemi, telefonda POS, restoran işletim sistemi,
+                  kurulum gerektirmeyen POS, bulut restoran yazılımı,
+                  restoran yönetim sistemi, kurye takip sistemi,
+                  QR menü sistemi, tarayıcı tabanlı POS, restoran otomasyon sistemi
 
-   ─────── ALTERNATIVE HERO HEADLINES ───────────
-   1. "Teknikersiz. Ayarsız. Anında Çalışır."
-   2. "Restoranını 5 Dakikada Dijitale Taşı — Hiçbir Teknik Bilgi Gerekmez."
-   3. "Cihazı Tak, Siparişleri Al. Gerisini Biz Hallederiz."
-   ─────────────────────────────────────────────── */
+   ─── 3 HERO VARYASYONu ──────────────────────────────
+   1. "Telefon. Tarayıcı. Restoran Hazır."
+   2. "Uygulama Yok. Tekniker Yok. Sadece Çalışan Bir Sistem."
+   3. "Garsonun telefonu = POS. Her şey gerçek zamanlı, her şey bulutta."
+   ═══════════════════════════════════════════════════════ */
 
-// ── tiny utility ────────────────────────────────
+// ── utility ──────────────────────────────────────────
 function cn(...classes: (string | false | undefined | null)[]) {
   return classes.filter(Boolean).join(" ");
 }
 
-// ── animated counter ────────────────────────────
-function Counter({ end, suffix = "" }: { end: number; suffix?: string }) {
+// ── intersection-based counter ───────────────────────
+function Counter({ end, suffix = "", prefix = "" }: { end: number; suffix?: string; prefix?: string }) {
   const [count, setCount] = useState(0);
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
@@ -32,12 +32,873 @@ function Counter({ end, suffix = "" }: { end: number; suffix?: string }) {
       ([entry]) => {
         if (!entry.isIntersecting) return;
         observer.disconnect();
-        let start = 0;
-        const step = Math.ceil(end / 60);
+        let current = 0;
+        const step = Math.max(1, Math.ceil(end / 60));
         const timer = setInterval(() => {
-          start += step;
-          if (start >= end) { setCount(end); clearInterval(timer); }
-          else setCount(start);
+          current += step;
+          if (current >= end) { setCount(end); clearInterval(timer); }
+          else setCount(current);
+        }, 16);
+      },
+      { threshold: 0.5 }
+    );
+    if (ref.current) observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, [end]);
+  return <span ref={ref}>{prefix}{count}{suffix}</span>;
+}
+
+// ── phone mockup widget ───────────────────────────────
+function PhoneMockup() {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick(p => p + 1), 2200);
+    return () => clearInterval(t);
+  }, []);
+
+  const screens = [
+    {
+      title: "Garson Paneli",
+      color: "from-orange-500/20 to-orange-600/10",
+      border: "border-orange-500/30",
+      dot: "bg-orange-400",
+      dotColor: "text-orange-400",
+      rows: [
+        { label: "Masa 5 — Mercimek", status: "Siparişte", sc: "text-orange-400" },
+        { label: "Masa 3 — Köfte x2", status: "Mutfakta", sc: "text-yellow-400" },
+        { label: "Masa 8 — Ayran x3", status: "Hazır ✓", sc: "text-green-400" },
+      ],
+    },
+    {
+      title: "Mutfak Ekranı",
+      color: "from-green-500/20 to-green-600/10",
+      border: "border-green-500/30",
+      dot: "bg-green-400",
+      dotColor: "text-green-400",
+      rows: [
+        { label: "Köfte x2 — Masa 3", status: "2 dk", sc: "text-yellow-400" },
+        { label: "Lahmacun x1 — Masa 1", status: "5 dk", sc: "text-red-400" },
+        { label: "Çorba x3 — Masa 7", status: "Hazır", sc: "text-green-400" },
+      ],
+    },
+    {
+      title: "Kurye Takip",
+      color: "from-blue-500/20 to-blue-600/10",
+      border: "border-blue-500/30",
+      dot: "bg-blue-400",
+      dotColor: "text-blue-400",
+      rows: [
+        { label: "#47 Ahmet K. — Yolda", status: "1.2 km", sc: "text-blue-400" },
+        { label: "#48 Mehmet D. — Teslim", status: "✓", sc: "text-green-400" },
+        { label: "#49 Yeni Sipariş", status: "Bekliyor", sc: "text-orange-400" },
+      ],
+    },
+  ];
+
+  const s = screens[tick % screens.length];
+
+  return (
+    <div className="relative w-[220px] mx-auto select-none">
+      <div className="relative rounded-[2.5rem] border-[6px] border-zinc-700 bg-[#111] shadow-2xl shadow-black/60 overflow-hidden">
+        <div className="h-6 bg-[#111] flex items-center justify-center">
+          <div className="w-16 h-3 bg-zinc-800 rounded-full" />
+        </div>
+        <div className={cn("min-h-[340px] bg-gradient-to-b p-4 transition-all duration-700", s.color)}>
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-[10px] text-zinc-400 font-mono">9:41</span>
+            <div className={cn("flex items-center gap-1 text-[10px] font-semibold", s.dotColor)}>
+              <span className={cn("w-1.5 h-1.5 rounded-full animate-pulse", s.dot)} />
+              CANLI
+            </div>
+          </div>
+          <div className={cn("text-xs font-bold text-white mb-4 border-b pb-2", s.border)}>
+            {s.title}
+          </div>
+          <div className="space-y-3">
+            {s.rows.map((r, i) => (
+              <div key={i} className={cn("flex items-center justify-between bg-white/5 border rounded-xl px-3 py-2", s.border)}>
+                <span className="text-[11px] text-zinc-300 font-medium leading-tight max-w-[120px]">{r.label}</span>
+                <span className={cn("text-[10px] font-bold", r.sc)}>{r.status}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-6 text-center">
+            <span className="text-[9px] font-semibold text-zinc-500 bg-white/5 px-3 py-1 rounded-full">
+              rms.com.tr — Tarayıcı Uygulaması
+            </span>
+          </div>
+        </div>
+        <div className="h-5 bg-[#111] flex items-center justify-center">
+          <div className="w-24 h-1 bg-zinc-700 rounded-full" />
+        </div>
+      </div>
+      <div className="absolute -left-16 top-16 bg-green-500/20 border border-green-500/30 rounded-xl px-2.5 py-1.5 text-[10px] font-bold text-green-400 whitespace-nowrap animate-pulse">
+        ⚡ Gerçek Zamanlı
+      </div>
+      <div className="absolute -right-14 bottom-24 bg-orange-500/20 border border-orange-500/30 rounded-xl px-2.5 py-1.5 text-[10px] font-bold text-orange-400 whitespace-nowrap">
+        📱 Uygulama Yok
+      </div>
+    </div>
+  );
+}
+
+// ── navbar ────────────────────────────────────────────
+function Navbar() {
+  const [scrolled, setScrolled] = useState(false);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const fn = () => setScrolled(window.scrollY > 24);
+    window.addEventListener("scroll", fn);
+    return () => window.removeEventListener("scroll", fn);
+  }, []);
+
+  const links = [
+    { label: "Özellikler", href: "#features" },
+    { label: "Kurye", href: "#delivery" },
+    { label: "Nasıl Çalışır", href: "#how" },
+    { label: "Fiyatlar", href: "#pricing" },
+  ];
+
+  return (
+    <nav className={cn(
+      "fixed top-0 left-0 right-0 z-50 transition-all duration-300",
+      scrolled ? "bg-[#08080f]/96 backdrop-blur-xl border-b border-white/8 shadow-xl" : "bg-transparent"
+    )}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
+        <a href="#" className="flex items-center gap-2.5 group">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center shadow-lg shadow-orange-500/30 group-hover:shadow-orange-500/50 transition-shadow">
+            <span className="text-white font-black text-sm">R</span>
+          </div>
+          <span className="font-black text-white text-lg tracking-tight">RMS</span>
+          <span className="hidden sm:inline text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-full tracking-wider">
+            MOBİL-FIRST
+          </span>
+        </a>
+        <div className="hidden md:flex items-center gap-8">
+          {links.map(l => (
+            <a key={l.href} href={l.href} className="text-sm text-zinc-400 hover:text-white transition-colors font-medium">
+              {l.label}
+            </a>
+          ))}
+        </div>
+        <div className="hidden md:flex items-center gap-3">
+          <a href="#pricing" className="text-sm font-medium text-zinc-400 hover:text-white transition-colors">Giriş</a>
+          <a href="#cta" className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-400 hover:to-red-400 text-white text-sm font-bold px-5 py-2 rounded-xl transition-all shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 active:scale-95">
+            Ücretsiz Başla →
+          </a>
+        </div>
+        <button onClick={() => setOpen(!open)} className="md:hidden text-white p-1 space-y-1.5">
+          <div className={cn("w-6 h-0.5 bg-white transition-all origin-center", open && "rotate-45 translate-y-2")} />
+          <div className={cn("w-6 h-0.5 bg-white transition-all", open && "opacity-0 scale-x-0")} />
+          <div className={cn("w-6 h-0.5 bg-white transition-all origin-center", open && "-rotate-45 -translate-y-2")} />
+        </button>
+      </div>
+      {open && (
+        <div className="md:hidden bg-[#08080f]/98 border-t border-white/8 px-4 py-5 flex flex-col gap-5">
+          {links.map(l => (
+            <a key={l.href} href={l.href} onClick={() => setOpen(false)} className="text-zinc-300 hover:text-white font-medium transition-colors">
+              {l.label}
+            </a>
+          ))}
+          <a href="#cta" onClick={() => setOpen(false)} className="bg-gradient-to-r from-orange-500 to-red-500 text-white text-center font-bold px-4 py-3 rounded-xl">
+            Ücretsiz Başla →
+          </a>
+        </div>
+      )}
+    </nav>
+  );
+}
+
+// ── hero ──────────────────────────────────────────────
+function Hero() {
+  return (
+    <section className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden bg-[#08080f] pt-16">
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-[20%] left-[10%] w-[500px] h-[500px] bg-orange-600/8 rounded-full blur-[100px]" />
+        <div className="absolute bottom-[10%] right-[5%] w-[400px] h-[400px] bg-blue-600/6 rounded-full blur-[100px]" />
+        <div className="absolute top-[50%] left-[50%] -translate-x-1/2 -translate-y-1/2 w-[700px] h-[400px] bg-red-600/4 rounded-full blur-[120px]" />
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:72px_72px]" />
+      </div>
+
+      <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 w-full">
+        <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-20">
+          <div className="flex-1 text-center lg:text-left">
+            <div className="inline-flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-bold px-4 py-2 rounded-full mb-6 tracking-wide uppercase">
+              <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
+              POS değil — Restoran İşletim Sistemi
+            </div>
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-black text-white leading-[1.05] tracking-tight mb-5">
+              Telefon.{" "}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-red-400 to-orange-500">
+                Tarayıcı.
+              </span>
+              <br />
+              Restoran Hazır.
+            </h1>
+            <p className="text-lg sm:text-xl text-zinc-300 leading-relaxed mb-4 max-w-xl">
+              Garson kendi telefonundan sipariş alır. Mutfak anında görür.
+              Kurye takip edilir. Yönetici her şeyi kontrol eder.
+            </p>
+            <p className="text-base text-zinc-500 mb-8 max-w-lg">
+              <span className="text-orange-400 font-semibold">Uygulama yok.</span>{" "}
+              <span className="text-orange-400 font-semibold">Kurulum yok.</span>{" "}
+              <span className="text-orange-400 font-semibold">Tekniker yok.</span>{" "}
+              Sadece tarayıcıyı aç, işe başla.
+            </p>
+            <div className="flex flex-wrap gap-2 mb-8 justify-center lg:justify-start">
+              {[
+                { e: "📱", t: "Her telefonda çalışır" },
+                { e: "🌐", t: "Sadece tarayıcı" },
+                { e: "⚡", t: "Gerçek zamanlı" },
+                { e: "🛵", t: "Kurye takibi dahil" },
+                { e: "☁️", t: "Bulut tabanlı" },
+              ].map(p => (
+                <span key={p.t} className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-300 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full">
+                  <span>{p.e}</span>{p.t}
+                </span>
+              ))}
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
+              <a href="#cta" className="group inline-flex items-center justify-center gap-2 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-400 hover:to-red-400 text-white font-bold text-base px-8 py-4 rounded-xl transition-all shadow-2xl shadow-orange-500/30 hover:shadow-orange-500/50 hover:-translate-y-0.5 active:scale-95">
+                Ücretsiz Kullanmaya Başla
+                <span className="group-hover:translate-x-1 transition-transform">→</span>
+              </a>
+              <a href="#how" className="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-semibold text-base px-8 py-4 rounded-xl transition-all hover:-translate-y-0.5">
+                Nasıl Çalışır?
+              </a>
+            </div>
+            <p className="mt-5 text-xs text-zinc-600">
+              Kredi kartı gerekmez · Anında kurulum · 14 gün ücretsiz
+            </p>
+          </div>
+          <div className="flex-shrink-0 flex flex-col items-center gap-6">
+            <PhoneMockup />
+            <p className="text-xs text-zinc-600 text-center">
+              ↑ Gerçek arayüzden önizleme — otomatik yenileniyor
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-16 grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[
+            { v: 500, s: "+", label: "Aktif Restoran" },
+            { v: 40, s: "%", label: "Daha Hızlı Sipariş" },
+            { v: 0, s: " TL", label: "Kurulum Ücreti" },
+            { v: 5, s: " dk", label: "Ortalama Devreye Alma" },
+          ].map(st => (
+            <div key={st.label} className="bg-white/3 border border-white/8 rounded-2xl p-5 text-center">
+              <div className="text-3xl font-black text-white mb-1">
+                <Counter end={st.v} suffix={st.s} />
+              </div>
+              <div className="text-xs text-zinc-500">{st.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── problem ───────────────────────────────────────────
+function Problem() {
+  return (
+    <section className="bg-[#0c0c14] py-24 px-4 sm:px-6">
+      <div className="max-w-5xl mx-auto">
+        <div className="text-center mb-14">
+          <span className="text-xs font-bold text-red-400 tracking-widest uppercase">Sorun</span>
+          <h2 className="mt-3 text-3xl sm:text-4xl md:text-5xl font-black text-white leading-tight">
+            Geleneksel POS Sistemi<br />
+            <span className="text-red-400">2005&apos;te Kaldı.</span>
+          </h2>
+          <p className="mt-4 text-zinc-400 text-lg max-w-xl mx-auto">
+            Hâlâ yazıcı sürücüsü yüklüyor, IP ayarı yapıyorsun.<br />
+            Bu 2026. Restoranın bunu hak etmiyor.
+          </p>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-4">
+          {[
+            { icon: "🔧", title: "Tekniker Olmadan Başlatamıyorsun", desc: "Kurulum için 2–5 gün bekliyorsun. Günlük ücret ödüyorsun. Bir bağlantı koparsa baştan." },
+            { icon: "💻", title: "Sadece O PC'den Çalışıyor", desc: "Sistem çöktü mü? İş durdu. O bilgisayara bağımlısın. Mobil? Mümkün değil." },
+            { icon: "📡", title: "Ağ Kurulumu = Kabusun", desc: "IP çakışması, yazıcı bulmayan sistem, subnet hataları. Bunları öğrenmek için değil, yemek satmak için buradasın." },
+            { icon: "🛵", title: "Kurye Takibi? Yok.", desc: "Hangi sipariş yolda, hangisi teslim edildi? Kimse bilmiyor. WhatsApp grubundan yönetiyorsunuz." },
+            { icon: "📉", title: "Güncelleme = Kapalı Sistem", desc: "Yeni özellik istiyorsun, tekniker geliyor, sistem kapatılıyor, saat kayıp, para kayıp." },
+            { icon: "💸", title: "Kurulum + Lisans + Bakım Ücreti", desc: "Başlamadan önce binlerce lira. Aylık sabit lisans. Arıza başına servis ücreti. Hiç bitmez." },
+          ].map(p => (
+            <div key={p.title} className="flex gap-4 bg-white/3 border border-white/8 hover:border-red-500/20 rounded-2xl p-5 transition-all">
+              <div className="text-2xl flex-shrink-0 mt-0.5">{p.icon}</div>
+              <div>
+                <h3 className="font-bold text-white text-base mb-1">{p.title}</h3>
+                <p className="text-zinc-400 text-sm leading-relaxed">{p.desc}</p>
+              </div>
+              <div className="ml-auto flex-shrink-0 w-5 h-5 rounded-full bg-red-500/10 flex items-center justify-center mt-0.5">
+                <span className="text-red-400 text-[10px] font-black">✕</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-10 text-center">
+          <div className="inline-flex items-center gap-3 bg-red-500/8 border border-red-500/20 rounded-2xl px-6 py-4">
+            <span className="text-2xl">😤</span>
+            <p className="text-zinc-300 text-sm font-medium">
+              Yüzlerce restoran aynı sorunla boğuşuyor.{" "}
+              <span className="text-red-400 font-bold">Araç sorunun.</span>
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── solution ─────────────────────────────────────────
+function Solution() {
+  return (
+    <section className="bg-[#08080f] py-24 px-4 sm:px-6 overflow-hidden">
+      <div className="max-w-5xl mx-auto">
+        <div className="text-center mb-14">
+          <span className="text-xs font-bold text-orange-400 tracking-widest uppercase">Çözüm</span>
+          <h2 className="mt-3 text-3xl sm:text-4xl md:text-5xl font-black text-white leading-tight">
+            RMS:{" "}
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-500">
+              Restoran İşletim Sistemi
+            </span>
+          </h2>
+          <p className="mt-4 text-zinc-300 text-lg max-w-2xl mx-auto">
+            POS sistemi değil. Kurulum gerektirmeyen, her cihazda çalışan,
+            kendini yöneten{" "}
+            <strong className="text-white">tam bir restoran OS&apos;u.</strong>
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-5 mb-12">
+          <div className="bg-white/3 border border-white/8 rounded-2xl p-7">
+            <p className="text-sm font-bold text-zinc-500 mb-5 uppercase tracking-widest">Eski POS Sistemi</p>
+            <div className="space-y-3">
+              {[
+                ["Kurulum", "3–7 gün + tekniker"],
+                ["Cihaz", "Sadece 1 PC"],
+                ["Güncelleme", "Manuel, sistem kapalı"],
+                ["Kurye", "Dahil değil"],
+                ["Ağ kurulumu", "Zorunlu, karmaşık"],
+                ["Maliyet", "Kurulum + lisans + bakım"],
+              ].map(([k, v]) => (
+                <div key={k} className="flex items-center justify-between text-sm border-b border-white/5 pb-3">
+                  <span className="text-zinc-500">{k}</span>
+                  <span className="text-red-400 font-medium">{v}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-orange-500/12 to-red-600/6 border border-orange-500/35 rounded-2xl p-7 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-40 h-40 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="flex items-center justify-between mb-5">
+              <p className="text-sm font-bold text-orange-400 uppercase tracking-widest">RMS</p>
+              <span className="text-[10px] font-black bg-orange-500/20 text-orange-400 border border-orange-500/30 px-2.5 py-1 rounded-full">YENİ NESİL</span>
+            </div>
+            <div className="space-y-3 relative z-10">
+              {[
+                ["Kurulum", "Sıfır — tarayıcıyı aç, başla"],
+                ["Cihaz", "Her telefon, tablet, PC"],
+                ["Güncelleme", "Otomatik, sessiz, kesintisiz"],
+                ["Kurye", "Dahil — canlı takip"],
+                ["Ağ kurulumu", "Otomatik algılama motoru"],
+                ["Maliyet", "Kullandığın kadar öde"],
+              ].map(([k, v]) => (
+                <div key={k} className="flex items-center justify-between text-sm border-b border-orange-500/10 pb-3">
+                  <span className="text-zinc-400">{k}</span>
+                  <span className="text-orange-300 font-semibold">{v}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { icon: "👨‍🍳", role: "Garson", color: "border-orange-500/25", glow: "bg-orange-500/8", tag: "text-orange-400", actions: ["Telefonda sipariş al", "Masa/paket seç", "Anlık durum görür"] },
+            { icon: "🍳", role: "Mutfak", color: "border-green-500/25", glow: "bg-green-500/8", tag: "text-green-400", actions: ["Siparişleri anlık gör", "Hazırla, onayla", "Zaman sayacı"] },
+            { icon: "🛵", role: "Kurye", color: "border-blue-500/25", glow: "bg-blue-500/8", tag: "text-blue-400", actions: ["Siparişleri al", "Teslim durumu gir", "Günlük hesap görür"] },
+            { icon: "📊", role: "Yönetici", color: "border-purple-500/25", glow: "bg-purple-500/8", tag: "text-purple-400", actions: ["Tüm şubeleri izle", "Ciro & raporlar", "Personel yönetimi"] },
+          ].map(r => (
+            <div key={r.role} className={cn("rounded-2xl border p-5 hover:scale-[1.02] transition-all", r.color, r.glow)}>
+              <div className="text-3xl mb-3">{r.icon}</div>
+              <div className={cn("text-xs font-black uppercase tracking-widest mb-3", r.tag)}>{r.role}</div>
+              <ul className="space-y-1.5">
+                {r.actions.map(a => (
+                  <li key={a} className="text-xs text-zinc-300 flex items-center gap-1.5">
+                    <span className="text-orange-400 font-bold">›</span>{a}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── mobile workflow ───────────────────────────────────
+function MobileFirst() {
+  const steps = [
+    { step: "01", icon: "📱", title: "Garson Telefonunu Açıyor", desc: "Kahya, garson, kasiyer — kim olursa olsun. Tarayıcıya giriş yapıyor. Uygulama indirmiyor.", detail: "Android, iPhone, eski tablet — fark etmez. Tarayıcı varsa çalışır." },
+    { step: "02", icon: "✍️", title: "Siparişi Alıp Gönderiyor", desc: "Masayı seçiyor, ürünlere dokunuyor, sipariş veriliyor. Süreç: 8 saniye. Mutfak anında görüyor.", detail: "Yoğun saatlerde bile sistem donmuyor. Eş zamanlı yüzlerce istek." },
+    { step: "03", icon: "🍳", title: "Mutfak Anlık Görüyor", desc: "Tablet veya büyük ekranda KDS açık. Her sipariş geldiğinde ses uyarısı. Aşçı hazırladığını işaretliyor.", detail: "Hangi ürün barda, hangisi mutfakta — otomatik yönlendirme." },
+    { step: "04", icon: "💳", title: "Kasiyer Ödeme Alıyor", desc: "Masa kapatma, adisyon yazdırma, bölüşümlü ödeme — hepsi tek ekrandan. Nakit + kart + QR.", detail: "Fiber yazıcı bağlantısı otomatik kurulur. IP girmene gerek yok." },
+  ];
+  return (
+    <section id="how" className="bg-[#0c0c14] py-24 px-4 sm:px-6">
+      <div className="max-w-5xl mx-auto">
+        <div className="text-center mb-14">
+          <span className="text-xs font-bold text-orange-400 tracking-widest uppercase">Mobil-First İş Akışı</span>
+          <h2 className="mt-3 text-3xl sm:text-4xl md:text-5xl font-black text-white">
+            Garsonun Telefonu<br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-500">
+              Artık POS Terminali
+            </span>
+          </h2>
+          <p className="mt-4 text-zinc-400 text-lg max-w-xl mx-auto">
+            Pahalı donanım yok. Şarj cihazına bağlı terminal yok.
+            Restoranındaki her telefon kullanılabilir.
+          </p>
+        </div>
+        <div className="grid md:grid-cols-2 gap-5">
+          {steps.map(s => (
+            <div key={s.step} className="flex gap-5 bg-white/3 border border-white/8 hover:border-orange-500/20 rounded-2xl p-6 transition-all group">
+              <div className="flex-shrink-0">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500/20 to-red-500/10 border border-orange-500/30 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                  {s.icon}
+                </div>
+                <div className="text-xs font-black text-zinc-700 text-center mt-1">{s.step}</div>
+              </div>
+              <div>
+                <h3 className="font-bold text-white text-base mb-1.5">{s.title}</h3>
+                <p className="text-zinc-400 text-sm leading-relaxed mb-2">{s.desc}</p>
+                <p className="text-xs text-zinc-600 bg-white/3 border border-white/6 rounded-lg px-3 py-2">{s.detail}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-10 bg-gradient-to-r from-orange-500/10 to-transparent border border-orange-500/20 rounded-2xl p-6 flex flex-col sm:flex-row items-center gap-5">
+          <div className="text-5xl">⚡</div>
+          <div>
+            <p className="font-black text-white text-xl">Sipariş→Mutfak Süresi: <span className="text-orange-400">ortalama 1.8 saniye</span></p>
+            <p className="text-zinc-500 text-sm mt-1">Geleneksel sistemler: garson kağıdı mutfağa taşıyor, ortalama 3–4 dakika.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── delivery ──────────────────────────────────────────
+function Delivery() {
+  return (
+    <section id="delivery" className="bg-[#08080f] py-24 px-4 sm:px-6">
+      <div className="max-w-5xl mx-auto">
+        <div className="flex flex-col lg:flex-row items-center gap-14">
+          <div className="flex-1">
+            <span className="text-xs font-bold text-blue-400 tracking-widest uppercase">Kurye & Teslimat</span>
+            <h2 className="mt-3 text-3xl sm:text-4xl font-black text-white leading-tight mb-5">
+              Kurye Yönetimi<br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-500">
+                Artık Dahil.
+              </span>
+            </h2>
+            <p className="text-zinc-300 text-base leading-relaxed mb-8">
+              WhatsApp gruplarıyla kurye takibi bitti. RMS&apos;in kurye modülü
+              siparişten teslimata tam döngüyü kapatır. Kuryenin telefonu
+              yeterli — başka bir uygulama gerekmez.
+            </p>
+            <div className="space-y-4 mb-8">
+              {[
+                { icon: "📍", title: "Canlı Kurye Takibi", desc: "Kurye nerede? Hangi siparişi taşıyor? Yöneticinin panelinde anlık görünür." },
+                { icon: "📋", title: "Otomatik Sipariş Atama", desc: "Sipariş hazır → en yakın müsait kuryeye otomatik atanır. Manuel süreç yok." },
+                { icon: "✅", title: "Teslim Onayı", desc: "Kurye 'Teslim Edildi' basar. Müşteri bildirim alır. Sistem kaydeder." },
+                { icon: "🧾", title: "Günlük Kurye Hesabı", desc: "Günün sonunda kurye bazında ciro, sipariş adedi, iade — tek tıkla rapor." },
+              ].map(f => (
+                <div key={f.title} className="flex gap-4">
+                  <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-lg flex-shrink-0">{f.icon}</div>
+                  <div>
+                    <h4 className="font-semibold text-white text-sm mb-0.5">{f.title}</h4>
+                    <p className="text-zinc-500 text-xs leading-relaxed">{f.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <a href="#cta" className="inline-flex items-center gap-2 bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 font-semibold px-6 py-3 rounded-xl transition-all text-sm">
+              🛵 Kurye Modülünü Gör →
+            </a>
+          </div>
+          <div className="flex-shrink-0 w-full max-w-xs">
+            <div className="bg-white/3 border border-blue-500/20 rounded-2xl overflow-hidden">
+              <div className="bg-gradient-to-r from-blue-500/15 to-cyan-500/10 px-4 py-3 border-b border-blue-500/15 flex items-center justify-between">
+                <span className="text-xs font-bold text-blue-400 uppercase tracking-widest">Kurye Paneli</span>
+                <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-semibold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />CANLI
+                </span>
+              </div>
+              <div className="p-4 space-y-3">
+                {[
+                  { name: "Ahmet K.", order: "#247 — Yolda", dist: "1.4 km", c: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20" },
+                  { name: "Mehmet D.", order: "#248 — Teslim", dist: "✓", c: "text-green-400", bg: "bg-green-500/10 border-green-500/20" },
+                  { name: "Fatih B.", order: "#249 — Hazırlanıyor", dist: "Bekliyor", c: "text-orange-400", bg: "bg-orange-500/10 border-orange-500/20" },
+                  { name: "Yusuf A.", order: "#250 — Atandı", dist: "0.8 km", c: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/20" },
+                ].map(k => (
+                  <div key={k.name} className={cn("border rounded-xl px-3 py-2.5 flex items-center justify-between", k.bg)}>
+                    <div>
+                      <div className="text-xs font-bold text-white">{k.name}</div>
+                      <div className="text-[10px] text-zinc-500 mt-0.5">{k.order}</div>
+                    </div>
+                    <span className={cn("text-xs font-bold", k.c)}>{k.dist}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="px-4 pb-4">
+                <div className="bg-white/3 border border-white/8 rounded-xl p-3 flex items-center justify-between">
+                  <span className="text-xs text-zinc-400">Bugünkü Teslimat</span>
+                  <span className="text-sm font-black text-white">47 sipariş</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── features ──────────────────────────────────────────
+function Features() {
+  const features = [
+    { icon: "📲", tag: "QR Menü", title: "QR Menü — Masa Başı Sipariş", desc: "Müşteri QR kodu tarar, kendi siparişini verir. Garson masaya gitmeden sipariş mutfağa gider.", items: ["Anlık menü güncellemesi", "Görsel ürün katalogu", "Kişiselleştirilebilir"], c: "border-purple-500/25 from-purple-500/10", tc: "text-purple-400 bg-purple-500/10 border-purple-500/20" },
+    { icon: "🖥️", tag: "Akıllı POS", title: "Gerçek Zamanlı POS", desc: "Masaları takip et, siparişleri saniyeler içinde işle. Çoklu ödeme, adisyon yazdırma, bölüşüm.", items: ["Her cihazda çalışır", "Çoklu ödeme yöntemi", "Anlık masa durumu"], c: "border-orange-500/25 from-orange-500/10", tc: "text-orange-400 bg-orange-500/10 border-orange-500/20" },
+    { icon: "🍳", tag: "KDS", title: "Mutfak Ekranı (KDS)", desc: "Siparişler otomatik mutfağa ve bara yönlenir. Aşçı bir ekrana bakıyor — yüzlerce sipariş, sıfır karışıklık.", items: ["Akıllı yönlendirme", "Zaman sayacı", "Ses uyarısı"], c: "border-green-500/25 from-green-500/10", tc: "text-green-400 bg-green-500/10 border-green-500/20" },
+    { icon: "⚙️", tag: "Oto-Kurulum", title: "Sıfır Kurulum Motoru", desc: "Yazıcıyı ağa bağla — sistem onu bulur, IP atar, konfigüre eder. Hiç IP girmeden yazıcı çalışır.", items: ["LAN otomatik tarama", "Plug & Play yazıcı", "Kendini onarır"], c: "border-red-500/25 from-red-500/10", tc: "text-red-400 bg-red-500/10 border-red-500/20" },
+    { icon: "📊", tag: "Analitik", title: "Canlı Dashboard", desc: "Ciro, en çok satan ürünler, masa devir hızı, kurye performansı — hepsi tek panelde, anlık.", items: ["Şube bazlı karşılaştırma", "Günlük/haftalık rapor", "Dışa aktarma"], c: "border-cyan-500/25 from-cyan-500/10", tc: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20" },
+    { icon: "☁️", tag: "Bulut", title: "Kesintisiz Bulut Altyapısı", desc: "Veriler şifreli bulutta. İnternet kesilirse geçici offline mod. Bağlantı gelince otomatik senkron.", items: ["Otomatik yedekleme", "KVKK uyumlu", "7/24 uptime"], c: "border-indigo-500/25 from-indigo-500/10", tc: "text-indigo-400 bg-indigo-500/10 border-indigo-500/20" },
+  ];
+  return (
+    <section id="features" className="bg-[#0c0c14] py-24 px-4 sm:px-6">
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center mb-14">
+          <span className="text-xs font-bold text-orange-400 tracking-widest uppercase">Özellikler</span>
+          <h2 className="mt-3 text-3xl sm:text-4xl md:text-5xl font-black text-white">POS Değil. OS.</h2>
+          <p className="mt-4 text-zinc-400 text-lg max-w-xl mx-auto">
+            Sipariş alma, mutfak yönetimi, kurye takibi, analitik — hepsi tek sistemde, hepsi tarayıcıda.
+          </p>
+        </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {features.map(f => (
+            <div key={f.title} className={cn("group rounded-2xl border bg-gradient-to-br to-transparent p-6 hover:scale-[1.025] transition-all duration-300", f.c)}>
+              <div className="flex items-start justify-between mb-4">
+                <div className="text-4xl">{f.icon}</div>
+                <span className={cn("text-[10px] font-black border px-2.5 py-1 rounded-full uppercase tracking-wider", f.tc)}>{f.tag}</span>
+              </div>
+              <h3 className="font-bold text-white text-base mb-2">{f.title}</h3>
+              <p className="text-zinc-400 text-sm leading-relaxed mb-4">{f.desc}</p>
+              <ul className="space-y-1.5">
+                {f.items.map(i => (
+                  <li key={i} className="flex items-center gap-2 text-xs text-zinc-300">
+                    <span className="text-orange-400 font-bold">›</span>{i}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── zero setup ────────────────────────────────────────
+function ZeroSetup() {
+  return (
+    <section className="bg-[#08080f] py-24 px-4 sm:px-6">
+      <div className="max-w-4xl mx-auto text-center">
+        <span className="text-xs font-bold text-orange-400 tracking-widest uppercase">Sıfır Kurulum Motoru</span>
+        <h2 className="mt-3 text-3xl sm:text-4xl md:text-5xl font-black text-white mb-5">
+          Cihazı Tak. Sistem<br />
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-500">
+            Geri Kalanını Halleder.
+          </span>
+        </h2>
+        <p className="text-zinc-400 text-lg mb-14 max-w-xl mx-auto">
+          Hiçbir zaman IP adresi girmeyeceksin. Hiçbir zaman yazıcı sürücüsü yüklemeyeceksin.
+          Sistem ağı tarar, cihazları bulur, bağlar.
+        </p>
+        <div className="relative">
+          <div className="hidden sm:block absolute top-8 left-[10%] right-[10%] h-0.5 bg-gradient-to-r from-transparent via-orange-500/50 to-transparent" />
+          <div className="grid sm:grid-cols-4 gap-6">
+            {[
+              { icon: "🔌", t: "Cihazı bağla", sub: "Yazıcı, tablet, PC" },
+              { icon: "🔍", t: "Ağ taraması", sub: "Otomatik, 8–15 sn" },
+              { icon: "🎯", t: "IP atama", sub: "Manuel giriş yok" },
+              { icon: "✅", t: "Hazır!", sub: "Sipariş almaya başla" },
+            ].map((s, i) => (
+              <div key={s.t} className="flex flex-col items-center">
+                <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500/20 to-red-500/10 border border-orange-500/35 flex items-center justify-center text-3xl mb-3 hover:scale-110 transition-transform shadow-xl shadow-orange-500/10">
+                  {s.icon}
+                  <div className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-orange-500 text-white text-[9px] font-black flex items-center justify-center">
+                    {i + 1}
+                  </div>
+                </div>
+                <p className="font-bold text-white text-sm mb-1">{s.t}</p>
+                <p className="text-xs text-zinc-500">{s.sub}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="mt-12 inline-flex items-center gap-3 bg-orange-500/10 border border-orange-500/25 rounded-2xl px-7 py-4">
+          <span className="text-3xl">🏆</span>
+          <p className="text-left">
+            <span className="font-black text-white text-lg block">Ortalama devreye alma: 4 dakika 38 saniye</span>
+            <span className="text-zinc-500 text-sm">Geleneksel POS kurulumu: 3–7 gün + tekniker ücreti</span>
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── testimonials ──────────────────────────────────────
+function Testimonials() {
+  const items = [
+    { q: "Garsonlarım kendi telefonlarından sipariş alıyor. Hiçbiri uygulama indirmedi, tarayıcıya girdiler, başladılar. Mutfak ekranı hayatımı değiştirdi. Artık kağıt koşturmuyoruz.", name: "Emre Arslan", role: "Sahibi — Arslan Burger, İstanbul", av: "EA", c: "bg-orange-500" },
+    { q: "Kurye modülü olmasaydı başka bir sistem aramazdım. Artık kimin nerede olduğunu görüyorum. Günlük kurye hesabını 5 dakikada kapatıyorum. WhatsApp grubuna veda ettim.", name: "Seda Yıldız", role: "İşletme Müdürü — YıldızEat, Ankara", av: "SY", c: "bg-blue-500" },
+    { q: "Deneme için kurulumu 20 dakikada yaptım. Ben bilgisayarda çok iyi değilim, talimatları takip ettim. Yazıcı kendiliğinden bağlandı. Gerçekten bu kadar basit.", name: "Halil İbrahim Doğan", role: "Kafe Sahibi — Minör Kafe, İzmir", av: "HD", c: "bg-green-500" },
+    { q: "3 şubeyi aynı anda görüyorum. Her şubenin cirosu, en çok satan ürünler, hangi garson kaç sipariş aldı — tek panel. Bunu yapan başka sistem görmedim.", name: "Ayşenur Çelik", role: "Zincir Kurucu — TabakChain, Bursa", av: "AÇ", c: "bg-purple-500" },
+    { q: "Mutfak ekranı bizi kurtardı. Sipariş hataları neredeyse sıfır. Aşçılar neyi hazırlayacaklarını tam olarak görüyor. Müşteri şikayetleri geçen aya göre %80 geriledi.", name: "Burak Koç", role: "Şef & Ortak — Koç Restaurant, Konya", av: "BK", c: "bg-red-500" },
+    { q: "Tekniker çağırmadan kurdum. IP ayarı yapmadan yazıcı çalıştı. Her şey otomatik oldu. Fiyatı makul, özellikler harika. Başka sisteme geçmeyi düşünmüyorum.", name: "Zehra Ak", role: "Restoran Yöneticisi — Ocakbaşı 34, İstanbul", av: "ZA", c: "bg-cyan-500" },
+  ];
+  return (
+    <section id="testimonials" className="bg-[#0c0c14] py-24 px-4 sm:px-6">
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center mb-14">
+          <span className="text-xs font-bold text-orange-400 tracking-widest uppercase">Müşteri Yorumları</span>
+          <h2 className="mt-3 text-3xl sm:text-4xl md:text-5xl font-black text-white">Restoranlar Konuşuyor</h2>
+          <p className="mt-4 text-zinc-400 text-base">Gerçek işletmeciler, gerçek sonuçlar.</p>
+        </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {items.map(t => (
+            <div key={t.name} className="bg-white/3 border border-white/8 hover:border-white/14 rounded-2xl p-6 flex flex-col transition-all">
+              <div className="flex gap-0.5 mb-4">
+                {[...Array(5)].map((_, i) => <span key={i} className="text-orange-400 text-sm">★</span>)}
+              </div>
+              <p className="text-zinc-300 text-sm leading-relaxed flex-1 mb-5">&ldquo;{t.q}&rdquo;</p>
+              <div className="flex items-center gap-3 pt-4 border-t border-white/6">
+                <div className={cn("w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-black", t.c)}>{t.av}</div>
+                <div>
+                  <div className="font-semibold text-white text-sm">{t.name}</div>
+                  <div className="text-zinc-600 text-xs">{t.role}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-12 grid sm:grid-cols-3 gap-4 text-center">
+          {[{ v: "500+", l: "Aktif Restoran" }, { v: "4.9/5", l: "Ortalama Puan" }, { v: "%98", l: "Müşteri Memnuniyeti" }].map(s => (
+            <div key={s.l} className="bg-white/3 border border-white/8 rounded-2xl py-6">
+              <div className="text-3xl font-black text-white mb-1">{s.v}</div>
+              <div className="text-zinc-500 text-sm">{s.l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── pricing ───────────────────────────────────────────
+function Pricing() {
+  const [annual, setAnnual] = useState(false);
+  const plans = [
+    {
+      name: "Başlangıç", monthly: 699, annual: 559,
+      desc: "Küçük restoran ve kafeler için. Hızlı başlangıç, sıfır kurulum.",
+      features: ["1 Şube", "Sınırsız garson (mobil)", "QR Menü", "Temel POS", "Mutfak Ekranı (1)", "Otomatik yazıcı kurulumu", "E-posta destek"],
+      cta: "14 Gün Ücretsiz Dene", highlight: false,
+    },
+    {
+      name: "Büyüme", monthly: 1299, annual: 1039,
+      desc: "Büyüyen restoran ve kurye sistemi kurmak isteyenler için.",
+      features: ["3 Şubeye Kadar", "Tüm Başlangıç özellikleri", "Kurye Takip Sistemi", "Sınırsız KDS ekranı", "Gelişmiş Analitik", "Stok yönetimi", "7/24 Öncelikli destek", "Özel onboarding"],
+      cta: "14 Gün Ücretsiz Dene", highlight: true, badge: "En Popüler",
+    },
+    {
+      name: "Kurumsal", monthly: null, annual: null,
+      desc: "Zincir ve çok şubeli işletmeler. SLA garantili, özel entegrasyon.",
+      features: ["Sınırsız Şube", "Tüm Büyüme özellikleri", "Beyaz etiket seçeneği", "Özel API entegrasyonu", "SLA garantisi (%99.9)", "Hesap Yöneticisi", "Kurumsal sözleşme", "Özel geliştirme"],
+      cta: "Demo Talep Et", highlight: false,
+    },
+  ];
+  return (
+    <section id="pricing" className="bg-[#08080f] py-24 px-4 sm:px-6">
+      <div className="max-w-5xl mx-auto">
+        <div className="text-center mb-12">
+          <span className="text-xs font-bold text-orange-400 tracking-widest uppercase">Fiyatlandırma</span>
+          <h2 className="mt-3 text-3xl sm:text-4xl md:text-5xl font-black text-white">Kullandığın Kadar Öde.</h2>
+          <p className="mt-4 text-zinc-400 text-lg max-w-xl mx-auto">Kurulum ücreti yok. Tekniker ücreti yok. Gizli ücret yok.</p>
+          <div className="mt-6 inline-flex items-center gap-3 bg-white/5 border border-white/10 rounded-full p-1">
+            <button onClick={() => setAnnual(false)} className={cn("px-4 py-1.5 rounded-full text-sm font-semibold transition-all", !annual ? "bg-orange-500 text-white shadow-lg" : "text-zinc-400 hover:text-white")}>
+              Aylık
+            </button>
+            <button onClick={() => setAnnual(true)} className={cn("px-4 py-1.5 rounded-full text-sm font-semibold transition-all flex items-center gap-2", annual ? "bg-orange-500 text-white shadow-lg" : "text-zinc-400 hover:text-white")}>
+              Yıllık
+              <span className="text-[9px] font-black bg-green-500/20 text-green-400 border border-green-500/30 px-1.5 py-0.5 rounded-full">%20 İNDİRİM</span>
+            </button>
+          </div>
+        </div>
+        <div className="grid md:grid-cols-3 gap-5 items-start">
+          {plans.map(p => (
+            <div key={p.name} className={cn("relative rounded-2xl border p-7 transition-all", p.highlight ? "bg-gradient-to-br from-orange-500/15 to-red-600/5 border-orange-500/45 shadow-2xl shadow-orange-500/10 md:scale-[1.04]" : "bg-white/3 border-white/8 hover:border-white/15")}>
+              {p.badge && (
+                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs font-black px-4 py-1 rounded-full shadow-lg">{p.badge}</div>
+              )}
+              <div className="mb-6">
+                <h3 className="font-black text-white text-xl mb-2">{p.name}</h3>
+                <div className="flex items-end gap-1 mb-2">
+                  {p.monthly !== null ? (
+                    <><span className="text-4xl font-black text-white">₺{annual ? p.annual : p.monthly}</span><span className="text-zinc-500 text-sm mb-1">/ay</span></>
+                  ) : (
+                    <span className="text-3xl font-black text-white">Özel Fiyat</span>
+                  )}
+                </div>
+                {p.monthly !== null && annual && (
+                  <p className="text-xs text-green-400 font-semibold mb-2">Yıllık faturalama — aylık ₺{p.monthly - (p.annual ?? 0)} tasarruf</p>
+                )}
+                <p className="text-zinc-400 text-sm">{p.desc}</p>
+              </div>
+              <ul className="space-y-2.5 mb-8">
+                {p.features.map(f => (
+                  <li key={f} className="flex items-center gap-2.5 text-sm text-zinc-300">
+                    <span className="text-orange-400 font-bold flex-shrink-0">✓</span>{f}
+                  </li>
+                ))}
+              </ul>
+              <a href="#cta" className={cn("block text-center font-bold py-3 rounded-xl transition-all text-sm", p.highlight ? "bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-400 hover:to-red-400 text-white shadow-lg shadow-orange-500/25" : "bg-white/8 hover:bg-white/15 text-white border border-white/10")}>
+                {p.cta}
+              </a>
+            </div>
+          ))}
+        </div>
+        <p className="text-center text-zinc-700 text-xs mt-8">
+          14 gün ücretsiz · Kredi kartı gerekmez · İstediğin zaman iptal et · KDV hariç
+        </p>
+      </div>
+    </section>
+  );
+}
+
+// ── final cta ──────────────────────────────────────────
+function FinalCTA() {
+  return (
+    <section id="cta" className="bg-[#0c0c14] py-24 px-4 sm:px-6">
+      <div className="max-w-4xl mx-auto">
+        <div className="relative rounded-3xl overflow-hidden border border-orange-500/30 p-10 sm:p-16 text-center bg-gradient-to-br from-orange-600/15 via-red-600/8 to-transparent">
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-80 h-80 bg-orange-500/12 rounded-full blur-3xl" />
+            <div className="absolute bottom-0 right-0 w-48 h-48 bg-red-500/8 rounded-full blur-2xl" />
+          </div>
+          <div className="relative z-10">
+            <div className="text-6xl mb-5">🚀</div>
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-white leading-tight mb-4">
+              Restoranını Bugün<br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-500">
+                Dijital Çağa Taşı.
+              </span>
+            </h2>
+            <p className="text-zinc-300 text-lg mb-2 max-w-xl mx-auto">
+              Telefonu açıyorsun, tarayıcıya giriyorsun, siparişleri alıyorsun. Bu kadar.
+            </p>
+            <p className="text-orange-400 font-bold text-sm mb-10">
+              Kurulum yok · Tekniker yok · 14 gün tamamen ücretsiz
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <a href="/pos" className="group inline-flex items-center justify-center gap-2 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-400 hover:to-red-400 text-white font-black text-lg px-10 py-4 rounded-xl transition-all shadow-2xl shadow-orange-500/35 hover:shadow-orange-500/55 hover:-translate-y-1 active:scale-95">
+                Ücretsiz Kullanmaya Başla
+                <span className="group-hover:translate-x-1 transition-transform">→</span>
+              </a>
+              <a href="mailto:demo@rms.com.tr" className="inline-flex items-center justify-center gap-2 bg-white/8 hover:bg-white/14 border border-white/15 text-white font-semibold text-lg px-10 py-4 rounded-xl transition-all hover:-translate-y-1">
+                📅 Demo İste
+              </a>
+            </div>
+            <div className="mt-10 flex flex-wrap items-center justify-center gap-5 text-xs text-zinc-500">
+              {["✓ Kredi kartı gerekmez", "✓ Anında erişim", "✓ Her cihazda çalışır", "✓ Türkçe destek"].map(t => <span key={t}>{t}</span>)}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── footer ─────────────────────────────────────────────
+function Footer() {
+  return (
+    <footer className="bg-[#06060b] border-t border-white/5 py-12 px-4 sm:px-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-10 mb-12">
+          <div className="col-span-full md:col-span-1">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center shadow-lg shadow-orange-500/25">
+                <span className="text-white font-black text-sm">R</span>
+              </div>
+              <span className="font-black text-white text-lg">RMS</span>
+            </div>
+            <p className="text-zinc-600 text-sm leading-relaxed max-w-xs">
+              Mobil-first, sıfır kurulum restoran işletim sistemi. Telefon, tarayıcı, hazır.
+            </p>
+          </div>
+          {[
+            { title: "Ürün", links: ["Özellikler", "Kurye Sistemi", "QR Menü", "Fiyatlar"] },
+            { title: "Şirket", links: ["Hakkımızda", "Blog", "Kariyer", "İletişim"] },
+            { title: "Destek", links: ["Başlangıç Rehberi", "Yardım Merkezi", "SSS", "Canlı Destek"] },
+          ].map(col => (
+            <div key={col.title}>
+              <h4 className="font-bold text-white text-sm mb-4">{col.title}</h4>
+              <ul className="space-y-2.5">
+                {col.links.map(l => (
+                  <li key={l}><a href="#" className="text-zinc-600 hover:text-zinc-300 text-sm transition-colors">{l}</a></li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+        <div className="border-t border-white/5 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <p className="text-zinc-700 text-sm">© 2026 RMS — Restoran İşletim Sistemi. Tüm hakları saklıdır.</p>
+          <div className="flex items-center gap-6 text-zinc-700 text-sm">
+            <a href="#" className="hover:text-zinc-400 transition-colors">Gizlilik</a>
+            <a href="#" className="hover:text-zinc-400 transition-colors">Kullanım Şartları</a>
+            <a href="#" className="hover:text-zinc-400 transition-colors">KVKK</a>
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+// ── page export ────────────────────────────────────────
+export default function LandingPage() {
+  return (
+    <div className="min-h-screen font-sans antialiased">
+      <Navbar />
+      <Hero />
+      <Problem />
+      <Solution />
+      <MobileFirst />
+      <Delivery />
+      <Features />
+      <ZeroSetup />
+      <Testimonials />
+      <Pricing />
+      <FinalCTA />
+      <Footer />
+    </div>
+  );
+}
         }, 16);
       },
       { threshold: 0.4 }
