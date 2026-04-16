@@ -899,15 +899,6 @@ export default function LandingPage() {
     </div>
   );
 }
-        }, 16);
-      },
-      { threshold: 0.4 }
-    );
-    if (ref.current) observer.observe(ref.current);
-    return () => observer.disconnect();
-  }, [end]);
-  return <span ref={ref}>{count}{suffix}</span>;
-}
 
 // ── nav ─────────────────────────────────────────
 function Navbar() {
