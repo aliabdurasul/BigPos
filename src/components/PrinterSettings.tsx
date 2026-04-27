@@ -15,10 +15,11 @@ function genId(): string {
 }
 
 export default function PrinterSettings() {
+  // usePOS must come FIRST — restaurantId is needed by usePrinter()
+  const { categories, printerConfig, updatePrinterConfig, restaurantId } = usePOS();
   const { status, error, printers, printLog, connect, disconnect, refreshPrinters, isQZLoaded } = usePrinter(restaurantId);
   // assignments kept for backwards compat in UI — now empty (no localStorage)
   const assignments: Record<string, string> = {};
-  const { categories, printerConfig, updatePrinterConfig, restaurantId } = usePOS();
   const [routing, setRouting] = useState<Record<string, string>>(printerConfig.categoryRouting || {});
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showCategoryRouting, setShowCategoryRouting] = useState(false);
