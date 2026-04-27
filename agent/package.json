@@ -1,0 +1,28 @@
+{
+  "name": "bigpos-agent",
+  "version": "1.0.0",
+  "description": "BigPOS local print agent — bridges Supabase print_jobs to LAN thermal printers over TCP :9100",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node --esm src/index.ts",
+    "install-service-win": "node dist/service/windows.js install",
+    "uninstall-service-win": "node dist/service/windows.js uninstall"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.8",
+    "better-sqlite3": "^9.4.3",
+    "node-windows": "^1.0.0-beta.8"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.0.0",
+    "@types/node-windows": "^0.1.7",
+    "typescript": "^5.5.0",
+    "ts-node": "^10.9.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

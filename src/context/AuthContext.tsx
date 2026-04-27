@@ -53,7 +53,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (error) {
-        return { success: false, error: 'Bir hata oluştu. Tekrar deneyin.' };
+        const message = error.message?.includes('verify_platform_login')
+          ? 'Sistem kurulumu eksik: verify_platform_login fonksiyonu bulunamadi.'
+          : `Giris hatasi: ${error.message}`;
+        return { success: false, error: message };
       }
 
       const rows = data as { id: string; email: string; name: string; role: string; restaurant_id: string | null; active: boolean }[];
@@ -108,7 +111,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (error) {
-        return { success: false, error: 'Bir hata oluştu. Tekrar deneyin.' };
+        const message = error.message?.includes('verify_staff_pin')
+          ? 'Sistem kurulumu eksik: verify_staff_pin fonksiyonu bulunamadi.'
+          : `Giris hatasi: ${error.message}`;
+        return { success: false, error: message };
       }
 
       const rows = data as { id: string; name: string; role: string; restaurant_id: string; active: boolean }[];

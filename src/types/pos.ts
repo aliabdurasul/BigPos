@@ -288,3 +288,80 @@ export const TABLE_STATUS_BORDER_COLORS: Record<TableStatus, string> = {
   occupied: 'border-red-200',
   waiting_payment: 'border-amber-200',
 };
+
+// ─── DB-backed Printer / Agent / Print Job Types ───────────────────
+
+export type PrinterStationType = 'kitchen' | 'bar' | 'cashier' | 'label';
+export type PrinterStatus      = 'online' | 'offline' | 'error' | 'unknown';
+export type PrintJobStatus     = 'pending' | 'dispatched' | 'printing' | 'done' | 'failed' | 'cancelled';
+export type PrintJobType       = 'kitchen' | 'receipt' | 'label' | 'test';
+export type AgentStatus        = 'active' | 'revoked' | 'pending';
+export type PrintStatus        = 'unprinted' | 'queued' | 'partial' | 'printed';
+
+/** A physical printer registered in the DB and managed by a local agent */
+export interface DbPrinter {
+  id:             string;
+  restaurantId:   string;
+  agentId:        string | null;
+  name:           string;
+  stationType:    PrinterStationType;
+  ipAddress:      string;
+  port:           number;
+  paperWidth:     58 | 80;
+  status:         PrinterStatus;
+  lastPingOkAt:   string | null;
+  errorMessage:   string | null;
+  active:         boolean;
+  createdAt:      string;
+  updatedAt:      string;
+}
+
+/** Category → printer routing rule */
+export interface PrinterCategoryRoute {
+  id:           string;
+  restaurantId: string;
+  categoryId:   string;
+  printerId:    string;
+  createdAt:    string;
+}
+
+/** A print job record in Supabase — claimed and executed by the local agent */
+export interface DbPrintJob {
+  id:           string;
+  restaurantId: string;
+  printerId:    string;
+  jobType:      PrintJobType;
+  payload:      Record<string, unknown>;
+  status:       PrintJobStatus;
+  attempts:     number;
+  maxAttempts:  number;
+  nextRetryAt:  string;
+  fingerprint:  string | null;
+  orderId:      string | null;
+  errorLog:     Array<{ attempt: number; error: string; ts: string }>;
+  createdAt:    string;
+  completedAt:  string | null;
+}
+
+/** Local BigPOS agent registered for a restaurant */
+export interface RestaurantAgent {
+  id:           string;
+  restaurantId: string;
+  tokenHint:    string;
+  hostname:     string | null;
+  localIp:      string | null;
+  agentVersion: string | null;
+  lastSeenAt:   string | null;
+  status:       AgentStatus;
+  createdAt:    string;
+}
+
+/** One-time install token for provisioning a new agent */
+export interface AgentInstallToken {
+  id:           string;
+  restaurantId: string;
+  tokenHint:    string;
+  status:       'pending' | 'used' | 'expired';
+  expiresAt:    string;
+  createdAt:    string;
+}

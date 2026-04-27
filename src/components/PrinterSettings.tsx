@@ -3,7 +3,6 @@ import { toast } from 'sonner';
 import { usePrinter } from '@/hooks/use-printer';
 import { usePOS } from '@/context/POSContext';
 import { testPrint } from '@/lib/printer';
-import { removeCategoryRoute, removePrinterForStation } from '@/lib/qz-tray';
 import { PrintStation, PrintStationPurpose, ReceiptSettings, DEFAULT_RECEIPT_SETTINGS } from '@/types/pos';
 import {
   Wifi, WifiOff, Loader2, Printer, RefreshCw, CheckCircle, XCircle,
@@ -16,8 +15,10 @@ function genId(): string {
 }
 
 export default function PrinterSettings() {
-  const { status, error, printers, assignments, printLog, connect, disconnect, refreshPrinters, assignPrinter, isQZLoaded } = usePrinter();
-  const { categories, printerConfig, updatePrinterConfig } = usePOS();
+  const { status, error, printers, printLog, connect, disconnect, refreshPrinters, isQZLoaded } = usePrinter(restaurantId);
+  // assignments kept for backwards compat in UI — now empty (no localStorage)
+  const assignments: Record<string, string> = {};
+  const { categories, printerConfig, updatePrinterConfig, restaurantId } = usePOS();
   const [routing, setRouting] = useState<Record<string, string>>(printerConfig.categoryRouting || {});
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showCategoryRouting, setShowCategoryRouting] = useState(false);
@@ -87,10 +88,9 @@ export default function PrinterSettings() {
 
   const saveStations = async () => {
     const removedIds = stations.filter(s => !draftStations.some(d => d.id === s.id)).map(s => s.id);
-    for (const id of removedIds) removePrinterForStation(id);
     const newCategoryRouting = { ...printerConfig.categoryRouting };
     for (const [catId, stationId] of Object.entries(newCategoryRouting)) {
-      if (removedIds.includes(stationId)) { delete newCategoryRouting[catId]; removeCategoryRoute(catId); }
+      if (removedIds.includes(stationId)) { delete newCategoryRouting[catId]; }
     }
     const prepDraft = draftStations.filter(s => s.purpose === 'prep');
     const defaultPrep = prepDraft.find(s => s.isDefault)?.id || prepDraft[0]?.id;
@@ -185,7 +185,7 @@ export default function PrinterSettings() {
 
   const handleTestPrint = (stationId: string) => {
     setTestingStation(stationId);
-    testPrint(stationId, receiptSettings.paperWidth);
+    testPrint(stationId, restaurantId || '');
     setTimeout(() => setTestingStation(null), 2000);
   };
 

@@ -2,17 +2,20 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   connectQZ, disconnectQZ, getPrinters,
   getQZStatus, getQZError, isQZLoaded, onQZStatusChange,
-  getPrinterForStation, setPrinterForStation, removePrinterForStation,
-  getAllPrinterAssignments,
+  fetchPrinters, fetchCategoryRouting,
   QZConnectionStatus,
 } from '@/lib/qz-tray';
-import { getPrintLog, onPrintLogChange, PrintJob } from '@/lib/print-manager';
+import { getPrintLog, onPrintLogChange, subscribePrintJobUpdates, PrintJob } from '@/lib/print-manager';
+import type { DbPrinter } from '@/types/pos';
 
-export function usePrinter() {
+export function usePrinter(restaurantId?: string) {
   const [status, setStatus] = useState<QZConnectionStatus>(getQZStatus());
   const [error, setError] = useState<string | null>(getQZError());
+  // QZ Tray system printer names (legacy/fallback)
   const [printers, setPrinterList] = useState<string[]>([]);
-  const [assignments, setAssignments] = useState<Record<string, string>>(getAllPrinterAssignments());
+  // DB-backed printers
+  const [dbPrinters, setDbPrinters] = useState<DbPrinter[]>([]);
+  const [categoryRouting, setCategoryRoutingState] = useState<Record<string, string>>({});
   const [printLog, setPrintLog] = useState<PrintJob[]>(getPrintLog());
 
   useEffect(() => {
@@ -23,6 +26,28 @@ export function usePrinter() {
     const unsub2 = onPrintLogChange(setPrintLog);
     return () => { unsub1(); unsub2(); };
   }, []);
+
+  // Subscribe to realtime print job updates
+  useEffect(() => {
+    if (!restaurantId) return;
+    const unsub = subscribePrintJobUpdates(restaurantId);
+    return unsub;
+  }, [restaurantId]);
+
+  // Load DB printers when restaurantId is available
+  const loadDbPrinters = useCallback(async () => {
+    if (!restaurantId) return;
+    const [printerList, routing] = await Promise.all([
+      fetchPrinters(restaurantId),
+      fetchCategoryRouting(restaurantId),
+    ]);
+    setDbPrinters(printerList);
+    setCategoryRoutingState(routing);
+  }, [restaurantId]);
+
+  useEffect(() => {
+    loadDbPrinters();
+  }, [loadDbPrinters]);
 
   const connect = useCallback(async () => {
     await connectQZ();
@@ -35,28 +60,23 @@ export function usePrinter() {
   const refreshPrinters = useCallback(async () => {
     const list = await getPrinters();
     setPrinterList(list);
-  }, []);
-
-  const assignPrinter = useCallback((stationId: string, name: string) => {
-    if (name) {
-      setPrinterForStation(stationId, name);
-    } else {
-      removePrinterForStation(stationId);
-    }
-    setAssignments(getAllPrinterAssignments());
-  }, []);
+    await loadDbPrinters();
+  }, [loadDbPrinters]);
 
   return {
+    // QZ Tray (legacy/optional)
     status,
     error,
     printers,
-    assignments,
-    printLog,
+    isQZLoaded: isQZLoaded(),
     connect,
     disconnect,
     refreshPrinters,
-    assignPrinter,
-    getPrinterForStation,
-    isQZLoaded: isQZLoaded(),
+    // DB-backed printers
+    dbPrinters,
+    categoryRouting,
+    reloadDbPrinters: loadDbPrinters,
+    // Print job log
+    printLog,
   };
 }

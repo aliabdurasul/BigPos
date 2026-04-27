@@ -1,23 +1,23 @@
 /**
- * QZ Tray connection manager.
- * Handles websocket connection, printer enumeration, role-based config,
- * category routing, and raw ESC/POS dispatch.
+ * QZ Tray connection manager (optional fallback path).
+ *
+ * QZ Tray is no longer the primary print path — the local BigPOS agent handles
+ * printing via Supabase `print_jobs`. This module is kept as an optional
+ * browser→printer bridge for environments that still need it (e.g., legacy setups).
+ *
+ * Printer config is now stored in Supabase (`printers` + `printer_category_routes`),
+ * not in localStorage. The localStorage-based functions have been removed.
  */
 
 /* global qz */
 declare const qz: any;
 
+import { supabase } from './supabase';
+import type { DbPrinter, PrinterCategoryRoute } from '@/types/pos';
+
 // ─── Types ─────────────────────────────────────
 
 export type QZConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
-
-/** Device-level printer bindings: stationId → system printer name */
-type PrinterConfig = Record<string, string>;
-
-// ─── Storage keys ──────────────────────────────
-
-const PRINTER_KEY = 'bigpos_printers';
-const ROUTING_KEY = 'bigpos_category_routing';
 
 // ─── State ─────────────────────────────────────
 
@@ -136,72 +136,103 @@ export async function getPrinters(): Promise<string[]> {
   }
 }
 
-// ─── Printer role config (localStorage) ────────
+// ─── DB-backed printer config ──────────────────
 
-function loadConfig(): PrinterConfig {
-  try {
-    return JSON.parse(localStorage.getItem(PRINTER_KEY) || '{}');
-  } catch {
+/**
+ * Fetch all active printers for a restaurant from Supabase.
+ * Used by the admin UI — not by the print path (that goes via print_jobs).
+ */
+export async function fetchPrinters(restaurantId: string): Promise<DbPrinter[]> {
+  const { data, error } = await supabase
+    .from('printers')
+    .select('*')
+    .eq('restaurant_id', restaurantId)
+    .eq('active', true)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('[qz-tray] fetchPrinters error:', error.message);
+    return [];
+  }
+  return (data ?? []).map(row => ({
+    id:             row.id,
+    restaurantId:   row.restaurant_id,
+    agentId:        row.agent_id,
+    name:           row.name,
+    stationType:    row.station_type,
+    ipAddress:      row.ip_address,
+    port:           row.port,
+    paperWidth:     row.paper_width,
+    status:         row.status,
+    lastPingOkAt:   row.last_ping_ok_at,
+    errorMessage:   row.error_message,
+    active:         row.active,
+    createdAt:      row.created_at,
+    updatedAt:      row.updated_at,
+  })) as DbPrinter[];
+}
+
+/**
+ * Fetch category → printer routing rules for a restaurant.
+ * Returns a map of categoryId → printerId.
+ */
+export async function fetchCategoryRouting(restaurantId: string): Promise<Record<string, string>> {
+  const { data, error } = await supabase
+    .from('printer_category_routes')
+    .select('category_id, printer_id')
+    .eq('restaurant_id', restaurantId);
+
+  if (error) {
+    console.error('[qz-tray] fetchCategoryRouting error:', error.message);
     return {};
   }
-}
 
-function saveConfig(cfg: PrinterConfig) {
-  localStorage.setItem(PRINTER_KEY, JSON.stringify(cfg));
-}
-
-export function getPrinterForStation(stationId: string): string | null {
-  return loadConfig()[stationId] || null;
-}
-
-export function setPrinterForStation(stationId: string, name: string) {
-  const cfg = loadConfig();
-  cfg[stationId] = name;
-  saveConfig(cfg);
-}
-
-export function removePrinterForStation(stationId: string) {
-  const cfg = loadConfig();
-  delete cfg[stationId];
-  saveConfig(cfg);
-}
-
-export function getAllPrinterAssignments(): PrinterConfig {
-  return loadConfig();
-}
-
-// ─── Category routing config ───────────────────
-
-/** categoryId → stationId */
-export function getCategoryRouting(): Record<string, string> {
-  try {
-    return JSON.parse(localStorage.getItem(ROUTING_KEY) || '{}');
-  } catch {
-    return {};
+  const map: Record<string, string> = {};
+  for (const row of data ?? []) {
+    map[row.category_id] = row.printer_id;
   }
+  return map;
 }
 
-export function setCategoryRoute(categoryId: string, stationId: string) {
-  const map = getCategoryRouting();
-  map[categoryId] = stationId;
-  localStorage.setItem(ROUTING_KEY, JSON.stringify(map));
+/**
+ * Save a category → printer routing rule to the DB.
+ * Upserts: one rule per (restaurant_id, category_id).
+ */
+export async function setCategoryRoute(restaurantId: string, categoryId: string, printerId: string): Promise<void> {
+  const { error } = await supabase
+    .from('printer_category_routes')
+    .upsert(
+      { restaurant_id: restaurantId, category_id: categoryId, printer_id: printerId },
+      { onConflict: 'restaurant_id,category_id' },
+    );
+  if (error) console.error('[qz-tray] setCategoryRoute error:', error.message);
 }
 
-export function removeCategoryRoute(categoryId: string) {
-  const map = getCategoryRouting();
-  delete map[categoryId];
-  localStorage.setItem(ROUTING_KEY, JSON.stringify(map));
+/**
+ * Remove a category routing rule.
+ */
+export async function removeCategoryRoute(restaurantId: string, categoryId: string): Promise<void> {
+  const { error } = await supabase
+    .from('printer_category_routes')
+    .delete()
+    .eq('restaurant_id', restaurantId)
+    .eq('category_id', categoryId);
+  if (error) console.error('[qz-tray] removeCategoryRoute error:', error.message);
 }
 
-// ─── Raw print dispatch ────────────────────────
+// ─── Raw print dispatch (legacy/fallback) ─────
 
-export async function printRaw(stationId: string, data: number[]): Promise<void> {
+/**
+ * @deprecated The primary print path now uses Supabase print_jobs + the local agent.
+ * This function remains for legacy environments that still use QZ Tray directly.
+ * To use, the caller must pass the QZ Tray printer name explicitly.
+ */
+export async function printRaw(printerName: string, data: number[]): Promise<void> {
   if (!isQZAvailable() || !qz.websocket.isActive()) {
     throw new Error('QZ Tray not connected');
   }
-  const printerName = getPrinterForStation(stationId);
   if (!printerName) {
-    throw new Error(`No printer assigned for station: ${stationId}`);
+    throw new Error('No printer name provided for printRaw');
   }
   const config = qz.configs.create(printerName);
   const printData = [{ type: 'raw', format: 'command', data, options: { language: 'ESCPOS' } }];
