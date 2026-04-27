@@ -129,7 +129,7 @@ export default function CashierPOS() {
     setSelectedTable(t);
     const existingOrders = getTableOrders(t.id);
     const sentItems = existingOrders.length > 0
-      ? existingOrders.flatMap(o => o.items.map(i => ({ ...i, _fromDB: true } as any)))
+      ? existingOrders.flatMap(o => (o.items || []).map(i => ({ ...i, _fromDB: true } as any)))
       : [];
     const drafts = draftItemsRef.current.get(t.id) || [];
     setOrderItems([...sentItems, ...drafts]);
@@ -138,9 +138,9 @@ export default function CashierPOS() {
 
   // ─── Computed values ───────────────────────
   const total = useMemo(
-    () => orderItems.reduce((sum, i) => {
-      const modExtra = i.modifiers.reduce((s, m) => s + m.extraPrice, 0);
-      return sum + (i.menuItem.price + modExtra) * i.quantity;
+    () => (orderItems || []).reduce((sum, i) => {
+      const modExtra = (i.modifiers || []).reduce((s, m) => s + m.extraPrice, 0);
+      return sum + ((i.menuItem?.price || 0) + modExtra) * i.quantity;
     }, 0),
     [orderItems]
   );
@@ -149,9 +149,9 @@ export default function CashierPOS() {
   const totalPaid = tableOrders.reduce((sum, o) => sum + (o.payments || []).reduce((s, p) => s + p.amount, 0), 0);
   const totalPrepayment = tableOrders.reduce((sum, o) => (o.payments || []).filter(p => p.type === 'prepayment').reduce((s, p) => s + p.amount, sum), 0);
   const ikramDeduction = useMemo(
-    () => orderItems.filter(i => ikramItems.has(i.id)).reduce((sum, i) => {
-      const ext = i.modifiers.reduce((s, m) => s + m.extraPrice, 0);
-      return sum + (i.menuItem.price + ext) * i.quantity;
+    () => (orderItems || []).filter(i => ikramItems.has(i.id)).reduce((sum, i) => {
+      const ext = (i.modifiers || []).reduce((s, m) => s + m.extraPrice, 0);
+      return sum + ((i.menuItem?.price || 0) + ext) * i.quantity;
     }, 0),
     [orderItems, ikramItems]
   );
@@ -247,9 +247,9 @@ export default function CashierPOS() {
       toast.info('Tüm ürünler zaten mutfağa gönderildi');
       return;
     }
-    const newItemsTotal = newItems.reduce((sum, i) => {
-      const modExtra = i.modifiers.reduce((s, m) => s + m.extraPrice, 0);
-      return sum + (i.menuItem.price + modExtra) * i.quantity;
+    const newItemsTotal = (newItems || []).reduce((sum, i) => {
+      const modExtra = (i.modifiers || []).reduce((s, m) => s + m.extraPrice, 0);
+      return sum + ((i.menuItem?.price || 0) + modExtra) * i.quantity;
     }, 0);
     const result = await addOrder({
       id: Date.now().toString(),
@@ -283,7 +283,7 @@ export default function CashierPOS() {
     draftItemsRef.current.delete(selectedTable.id);
     // Reload sent items from DB
     const existingOrders = getTableOrders(selectedTable.id);
-    const sentItems = existingOrders.flatMap(o => o.items.map(i => ({ ...i, _fromDB: true } as any)));
+    const sentItems = (existingOrders || []).flatMap(o => (o.items || []).map(i => ({ ...i, _fromDB: true } as any)));
     setOrderItems(sentItems);
   };
 

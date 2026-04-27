@@ -32,10 +32,10 @@ export default function AdminDashboard() {
   }, [todayOrders]);
 
   const stats = useMemo(() => {
-    const allPayments = todayOrders.flatMap(o => o.payments || []);
+    const allPayments = (todayOrders || []).flatMap(o => o.payments || []);
 
     const totalRevenue = allPayments.reduce((sum, p) => sum + p.amount, 0);
-    const totalOrders = todayOrders.length;
+    const totalOrders = (todayOrders || []).length;
 
     const cashPayments = allPayments.filter(p => p.method === 'nakit').reduce((s, p) => s + p.amount, 0);
     const cardPayments = allPayments.filter(p => p.method === 'kredi_karti').reduce((s, p) => s + p.amount, 0);
@@ -43,15 +43,15 @@ export default function AdminDashboard() {
     const discountPayments = allPayments.filter(p => p.method === 'discount').reduce((s, p) => s + p.amount, 0);
     const otherPayments = totalRevenue - cashPayments - cardPayments - splitPayments - discountPayments;
 
-    const activeTables = tables.filter(t => t.status !== 'available').length;
-    const availableTables = tables.filter(t => t.status === 'available').length;
+    const activeTables = (tables || []).filter(t => t.status !== 'available').length;
+    const availableTables = (tables || []).filter(t => t.status === 'available').length;
 
     const productMap: Record<string, { name: string; count: number }> = {};
-    todayOrders.forEach(o => {
-      o.items.forEach(item => {
-        const key = item.menuItem.id || item.menuItem.name;
-        if (!productMap[key]) productMap[key] = { name: item.menuItem.name, count: 0 };
-        productMap[key].count += item.quantity;
+    (todayOrders || []).forEach(o => {
+      (o.items || []).forEach(item => {
+        const key = item.menuItem?.id || item.menuItem?.name || 'unknown';
+        if (!productMap[key]) productMap[key] = { name: item.menuItem?.name || 'Bilinmiyor', count: 0 };
+        productMap[key].count += item.quantity || 1;
       });
     });
     const topSelling = Object.values(productMap).sort((a, b) => b.count - a.count).slice(0, 5);

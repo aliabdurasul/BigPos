@@ -17,6 +17,8 @@ import RestoranAdmin from "./pages/RestoranAdmin";
 import SuperAdmin from "./pages/SuperAdmin";
 import NotFound from "./pages/NotFound";
 
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+
 const queryClient = new QueryClient();
 
 function POSLayout({ children }: { children: React.ReactNode }) {
@@ -24,14 +26,17 @@ function POSLayout({ children }: { children: React.ReactNode }) {
   const restaurantId = session?.restaurantId || '';
   const staffId = session?.type === 'staff' ? session.staffId : null;
   return (
-    <POSProvider restaurantId={restaurantId} staffId={staffId}>
-      {children}
-    </POSProvider>
+    <ErrorBoundary>
+      <POSProvider restaurantId={restaurantId} staffId={staffId}>
+        {children}
+      </POSProvider>
+    </ErrorBoundary>
   );
 }
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
+  <ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
@@ -73,6 +78,7 @@ const App = () => (
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
+  </ErrorBoundary>
 );
 
 export default App;

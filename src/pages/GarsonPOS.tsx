@@ -104,7 +104,7 @@ export default function GarsonPOS() {
     setSelectedTable(t);
     const existingOrders = getTableOrders(t.id);
     const sentItems = existingOrders.length > 0
-      ? existingOrders.flatMap(o => o.items.map(i => ({ ...i, _fromDB: true } as any)))
+      ? existingOrders.flatMap(o => (o.items || []).map(i => ({ ...i, _fromDB: true } as any)))
       : [];
     const drafts = draftItemsRef.current.get(t.id) || [];
     setOrderItems([...sentItems, ...drafts]);
@@ -112,9 +112,9 @@ export default function GarsonPOS() {
   }, [getTableOrders, isMobile, selectedTable, orderItems, saveDrafts]);
 
   const total = useMemo(
-    () => orderItems.reduce((sum, i) => {
-      const modExtra = i.modifiers.reduce((s, m) => s + m.extraPrice, 0);
-      return sum + (i.menuItem.price + modExtra) * i.quantity;
+    () => (orderItems || []).reduce((sum, i) => {
+      const modExtra = (i.modifiers || []).reduce((s, m) => s + m.extraPrice, 0);
+      return sum + ((i.menuItem?.price || 0) + modExtra) * i.quantity;
     }, 0),
     [orderItems]
   );
@@ -213,9 +213,9 @@ export default function GarsonPOS() {
       toast.info('Tum urunler zaten mutfaga gonderildi');
       return;
     }
-    const newItemsTotal = newItems.reduce((sum, i) => {
-      const modExtra = i.modifiers.reduce((s, m) => s + m.extraPrice, 0);
-      return sum + (i.menuItem.price + modExtra) * i.quantity;
+    const newItemsTotal = (newItems || []).reduce((sum, i) => {
+      const modExtra = (i.modifiers || []).reduce((s, m) => s + m.extraPrice, 0);
+      return sum + ((i.menuItem?.price || 0) + modExtra) * i.quantity;
     }, 0);
     const result = await addOrder({
       id: Date.now().toString(),
@@ -253,10 +253,10 @@ export default function GarsonPOS() {
 
   const printAdisyon = () => {
     if (!selectedTable || orderItems.length === 0) return;
-    const items = orderItems.map(i => ({
-      name: i.menuItem.name,
+    const items = (orderItems || []).map(i => ({
+      name: i.menuItem?.name || 'Bilinmiyor',
       qty: i.quantity,
-      unitPrice: i.menuItem.price + i.modifiers.reduce((s, m) => s + m.extraPrice, 0),
+      unitPrice: (i.menuItem?.price || 0) + (i.modifiers || []).reduce((s, m) => s + m.extraPrice, 0),
     }));
     printAdisyonFn({
       restaurantName: restaurantName || 'RESTORAN',

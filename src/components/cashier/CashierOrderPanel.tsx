@@ -64,17 +64,17 @@ export default function CashierOrderPanel({
 }: CashierOrderPanelProps) {
   const ikramDeduction = useMemo(
     () =>
-      orderItems
+      (orderItems || [])
         .filter(i => ikramItems.has(i.id))
         .reduce((sum, i) => {
-          const ext = i.modifiers.reduce((s, m) => s + m.extraPrice, 0);
+          const ext = (i.modifiers || []).reduce((s, m) => s + m.extraPrice, 0);
           return sum + (i.menuItem.price + ext) * i.quantity;
         }, 0),
     [orderItems, ikramItems]
   );
 
   const renderItem = (item: OrderItem) => {
-    const unitPrice = item.menuItem.price + item.modifiers.reduce((s, m) => s + m.extraPrice, 0);
+    const unitPrice = item.menuItem.price + (item.modifiers || []).reduce((s, m) => s + m.extraPrice, 0);
     const itemPrice = unitPrice * item.quantity;
     const isSent = !!(item as any)._fromDB;
     const isIkram = ikramItems.has(item.id);
@@ -126,9 +126,9 @@ export default function CashierOrderPanel({
                 </span>
               )}
             </div>
-            {item.modifiers.length > 0 && (
+            {(item.modifiers || []).length > 0 && (
               <div className="mt-0.5">
-                {item.modifiers.map((m, idx) => (
+                {(item.modifiers || []).map((m, idx) => (
                   <p key={idx} className="text-[11px] text-muted-foreground leading-tight">
                     • {m.optionName} {m.extraPrice > 0 && `+${m.extraPrice}₺`}
                   </p>
