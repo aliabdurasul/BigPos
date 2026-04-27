@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/lib/supabase';
+import { supabase, setSessionToken } from '@/lib/supabase';
 import type { AuthSession, Staff } from '@/types/pos';
 
 // ─── Session Persistence ───────────────────────
@@ -9,7 +9,13 @@ const AUTH_KEY = 'auth_session';
 function loadSession(): AuthSession | null {
   try {
     const raw = localStorage.getItem(AUTH_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const s: AuthSession = JSON.parse(raw);
+      // Restore the session token immediately so the first DB query
+      // already carries the x-session-token header.
+      if (s.sessionToken) setSessionToken(s.sessionToken);
+      return s;
+    }
   } catch { /* ignore corrupt data */ }
   return null;
 }
@@ -82,6 +88,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (rData && rData.length > 0) slug = rData[0].slug;
       }
 
+      // Activate session token for subsequent requests
+      const token = (user as typeof user & { session_token?: string }).session_token ?? null;
+      if (token) setSessionToken(token);
+
       const newSession: AuthSession = {
         type: 'admin',
         userId: user.id,
@@ -90,6 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role: user.role as 'super_admin' | 'restoran_admin',
         restaurantId: user.restaurant_id,
         slug,
+        sessionToken: token ?? undefined,
       };
 
       setSession(newSession);
@@ -125,6 +136,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const staff = rows[0];
 
+      // Activate session token for subsequent requests
+      const token = (staff as typeof staff & { session_token?: string }).session_token ?? null;
+      if (token) setSessionToken(token);
+
       const newSession: AuthSession = {
         type: 'staff',
         staffId: staff.id,
@@ -132,6 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role: staff.role as 'garson' | 'mutfak' | 'manager' | 'cashier',
         restaurantId,
         slug,
+        sessionToken: token ?? undefined,
       };
 
       setSession(newSession);
@@ -145,6 +161,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // ── Logout ─────────────────────────────────
 
   const logout = useCallback(() => {
+    setSessionToken(null);
     setSession(null);
     clearSessionStorage();
   }, []);

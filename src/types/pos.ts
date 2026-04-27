@@ -28,8 +28,8 @@ export interface PlatformUser {
 }
 
 export type AuthSession =
-  | { type: 'admin'; userId: string; email: string; name: string; role: 'super_admin' | 'restoran_admin'; restaurantId: string | null; slug?: string }
-  | { type: 'staff'; staffId: string; name: string; role: 'garson' | 'mutfak' | 'manager' | 'cashier'; restaurantId: string; slug: string };
+  | { type: 'admin'; userId: string; email: string; name: string; role: 'super_admin' | 'restoran_admin'; restaurantId: string | null; slug?: string; sessionToken?: string }
+  | { type: 'staff'; staffId: string; name: string; role: 'garson' | 'mutfak' | 'manager' | 'cashier'; restaurantId: string; slug: string; sessionToken?: string };
 
 // ─── Menu Types ────────────────────────────────
 
