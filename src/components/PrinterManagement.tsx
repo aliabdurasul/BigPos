@@ -16,15 +16,17 @@ import { usePOS } from '@/context/POSContext';
 import { supabase } from '@/lib/supabase';
 import { testPrint } from '@/lib/printer';
 import { setCategoryRoute, removeCategoryRoute } from '@/lib/qz-tray';
-import type { DbPrinter, RestaurantAgent, PrinterStationType, PrinterStatus } from '@/types/pos';
+import type { DbPrinter, RestaurantAgent, PrinterStationType, PrinterStatus, ReceiptSettings } from '@/types/pos';
+import { DEFAULT_RECEIPT_SETTINGS } from '@/types/pos';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
 import {
   Wifi, WifiOff, Loader2, Printer, RefreshCw, CheckCircle, XCircle,
-  Clock, Plus, Trash2, Pencil, Check, X, Bot, AlertCircle,
+  Clock, Plus, Trash2, Pencil, Check, X, Bot, AlertCircle, Receipt,
 } from 'lucide-react';
 
 // ─── Status badge ──────────────────────────────────────────────────────────────
@@ -47,7 +49,7 @@ function StatusBadge({ status }: { status: PrinterStatus }) {
 // ─── Main component ────────────────────────────────────────────────────────────
 
 export default function PrinterManagement() {
-  const { restaurantId, categories } = usePOS();
+  const { restaurantId, categories, printerConfig, updatePrinterConfig } = usePOS();
   const [printers, setPrinters] = useState<DbPrinter[]>([]);
   const [agents, setAgents] = useState<RestaurantAgent[]>([]);
   const [categoryRouting, setCategoryRoutingState] = useState<Record<string, string>>({});
@@ -203,6 +205,40 @@ export default function PrinterManagement() {
     setTestingId(p.id);
     await testPrint(p.id, restaurantId);
     setTimeout(() => setTestingId(null), 2000);
+  };
+
+  // ─── Receipt settings ────────────────────────
+
+  const [draftReceipt, setDraftReceipt] = useState<ReceiptSettings>(
+    printerConfig?.receiptSettings ?? DEFAULT_RECEIPT_SETTINGS
+  );
+  const [receiptDirty, setReceiptDirty] = useState(false);
+  const [savingReceipt, setSavingReceipt] = useState(false);
+
+  // Sync when printerConfig loads from DB
+  useEffect(() => {
+    if (printerConfig?.receiptSettings) {
+      setDraftReceipt(printerConfig.receiptSettings);
+      setReceiptDirty(false);
+    }
+  }, [printerConfig?.receiptSettings]);
+
+  function patchReceipt<K extends keyof ReceiptSettings>(key: K, value: ReceiptSettings[K]) {
+    setDraftReceipt(prev => ({ ...prev, [key]: value }));
+    setReceiptDirty(true);
+  }
+
+  const saveReceiptSettings = async () => {
+    if (!printerConfig) return;
+    setSavingReceipt(true);
+    const ok = await updatePrinterConfig({ ...printerConfig, receiptSettings: draftReceipt });
+    setSavingReceipt(false);
+    if (ok !== false) {
+      toast.success('Fiş ayarları kaydedildi');
+      setReceiptDirty(false);
+    } else {
+      toast.error('Kaydedilemedi');
+    }
   };
 
   // ─── Install token generation ─────────────────
@@ -473,6 +509,77 @@ export default function PrinterManagement() {
           <p className="text-xs text-gray-500">
             Token sadece bir kez gösterilir ve panoya kopyalanır. Agent kurulum sırasında bu token'ı kullanır.
           </p>
+        </CardContent>
+      </Card>
+      {/* ─── Receipt Settings ─── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Receipt className="w-4 h-4" />
+            Fiş Ayarları
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium">Kağıt Genişliği</label>
+              <Select
+                value={String(draftReceipt.paperWidth)}
+                onValueChange={v => patchReceipt('paperWidth', Number(v) as 58 | 80)}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="58">58mm</SelectItem>
+                  <SelectItem value="80">80mm</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Kopya Sayısı</label>
+              <Input
+                type="number" min={1} max={5}
+                value={draftReceipt.copies}
+                onChange={e => patchReceipt('copies', Math.max(1, Number(e.target.value)))}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-sm font-medium">Başlık Metni</label>
+            <Input
+              value={draftReceipt.headerText ?? ''}
+              onChange={e => patchReceipt('headerText', e.target.value)}
+              placeholder="ör: Restoran Adı, Adres..."
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Alt Bilgi Metni</label>
+            <Input
+              value={draftReceipt.footerText}
+              onChange={e => patchReceipt('footerText', e.target.value)}
+              placeholder="ör: Teşekkür ederiz!"
+            />
+          </div>
+          <div className="space-y-3 pt-1">
+            {([
+              ['showLogo',             'Logo göster'],
+              ['showModifiers',        'Modifier detaylarını göster'],
+              ['showPaymentBreakdown', 'Ödeme dökümünü göster'],
+              ['showStaffName',        'Personel adını göster'],
+              ['openDrawer',           'Fiş yazdırınca para çekmecesini aç'],
+            ] as [keyof ReceiptSettings, string][]).map(([key, label]) => (
+              <div key={key} className="flex items-center justify-between">
+                <label className="text-sm">{label}</label>
+                <Switch
+                  checked={!!draftReceipt[key]}
+                  onCheckedChange={v => patchReceipt(key, v as ReceiptSettings[typeof key])}
+                />
+              </div>
+            ))}
+          </div>
+          <Button onClick={saveReceiptSettings} disabled={!receiptDirty || savingReceipt}>
+            {savingReceipt ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Check className="w-4 h-4 mr-1" />}
+            Kaydet
+          </Button>
         </CardContent>
       </Card>
     </div>

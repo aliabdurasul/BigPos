@@ -253,30 +253,15 @@ export function formatGunSonu(data: GunSonuData): string {
 // Print helper — sends to QZ Tray if connected, else opens print window
 // ═══════════════════════════════════════
 
-export function printReceipt(text: string, title: string = 'Fis', receiptStationId: string = 'receipt') {
-  import('./qz-tray').then(({ getQZStatus }) => {
-    if (getQZStatus() === 'connected') {
-      import('./escpos').then(({ ESCPOSBuilder }) => {
-        import('./print-manager').then(({ enqueue, buildFingerprint }) => {
-          const b = new ESCPOSBuilder(80);
-          for (const line of text.split('\n')) {
-            b.text(line);
-          }
-          b.cut();
-          const fp = buildFingerprint('adisyon', Date.now().toString());
-          enqueue(receiptStationId, b.build(), fp);
-        });
-      });
-    } else {
-      // Fallback: open browser print window
-      const win = window.open('', '_blank', 'width=320,height=600');
-      if (win) {
-        win.document.write(`<html><head><title>${title}</title><style>body{font-family:monospace;font-size:12px;white-space:pre;margin:10px;}</style></head><body>${text}</body></html>`);
-        win.document.close();
-        win.print();
-      } else {
-        console.log(`[PRINT] ${title}\n${text}`);
-      }
-    }
-  });
+export function printReceipt(text: string, title: string = 'Fis') {
+  // Open a browser print window — the new agent path handles ESC/POS rendering
+  // via print_jobs. For programmatic ESC/POS printing use printEndOfDay() in printer.ts.
+  const win = window.open('', '_blank', 'width=320,height=600');
+  if (win) {
+    win.document.write(`<html><head><title>${title}</title><style>body{font-family:monospace;font-size:12px;white-space:pre;margin:10px;}</style></head><body>${text}</body></html>`);
+    win.document.close();
+    win.print();
+  } else {
+    console.log(`[PRINT] ${title}\n${text}`);
+  }
 }

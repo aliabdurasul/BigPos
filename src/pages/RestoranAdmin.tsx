@@ -6,7 +6,7 @@ import { ArrowLeft, Plus, Trash2, UtensilsCrossed, Grid3X3, Tag, Users, Store, B
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import AdminDashboard from '@/components/AdminDashboard';
-import PrinterSettings from '@/components/PrinterSettings';
+import PrinterManagement from '@/components/PrinterManagement';
 
 type Tab = 'raporlar' | 'menu' | 'kategori' | 'modifierler' | 'masa' | 'personel' | 'katlar' | 'yazicilar';
 
@@ -461,7 +461,7 @@ export default function RestoranAdmin() {
             </div>
           )}
 
-          {activeTab === 'yazicilar' && <PrinterSettings />}
+          {activeTab === 'yazicilar' && <PrinterManagement />}
         </div>
       </div>
 
