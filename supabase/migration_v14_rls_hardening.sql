@@ -256,26 +256,26 @@ CREATE POLICY "deny_direct_platform_users" ON platform_users
 -- Helper macro for the common pattern:
 
 -- Tenant tables (have restaurant_id column):
+-- Tables that have a direct restaurant_id column:
 DO $$
 DECLARE
   tbl text;
   tenant_tables text[] := ARRAY[
     'staff', 'floors', 'categories', 'menu_items',
-    'modifier_groups', 'modifier_options', 'product_modifier_groups',
+    'modifier_groups',
     'tables', 'orders', 'order_items', 'payments',
-    'daily_closures', 'kitchen_logs', 'discounts', 'order_item_modifiers',
+    'daily_closures', 'kitchen_logs', 'discounts',
     'printers', 'printer_category_routes', 'print_jobs', 'agent_commands'
   ];
   old_policy text;
   policy_names text[] := ARRAY[
     'Allow all on staff',       'Allow all on floors',
     'Allow all on categories',  'Allow all on menu_items',
-    'Allow all on modifier_groups', 'Allow all on modifier_options',
-    'Allow all on product_modifier_groups', 'Allow all on tables',
-    'Allow all on orders',      'Allow all on order_items',
-    'Allow all on payments',    'Allow all on daily_closures',
-    'Allow all on kitchen_logs','Allow all on discounts',
-    'Allow all on order_item_modifiers',
+    'Allow all on modifier_groups',
+    'Allow all on tables',      'Allow all on orders',
+    'Allow all on order_items', 'Allow all on payments',
+    'Allow all on daily_closures', 'Allow all on kitchen_logs',
+    'Allow all on discounts',
     'printers_all', 'routes_all', 'print_jobs_all', 'agent_commands_all'
   ];
   i int;
@@ -284,9 +284,9 @@ BEGIN
     tbl := tenant_tables[i];
     old_policy := policy_names[i];
 
-    -- Drop the old open policy
+    -- Drop the old open policy (%I quotes as identifier, not string literal)
     EXECUTE format(
-      'DROP POLICY IF EXISTS %L ON %I',
+      'DROP POLICY IF EXISTS %I ON %I',
       old_policy, tbl
     );
 
@@ -294,9 +294,7 @@ BEGIN
     EXECUTE format($pol$
       CREATE POLICY "tenant_isolation" ON %I
         FOR ALL USING (
-          -- Row matches the current session's restaurant
           restaurant_id = current_setting('app.current_restaurant_id', true)::uuid
-          -- FALLBACK: no session context set yet (migration period)
           OR current_setting('app.current_restaurant_id', true) IS NULL
           OR current_setting('app.current_restaurant_id', true) = ''
         )
@@ -308,6 +306,90 @@ BEGIN
     $pol$, tbl);
   END LOOP;
 END $$;
+
+-- ─── Child / junction tables (no direct restaurant_id) ────────────────────
+-- These are scoped via their parent's restaurant_id using EXISTS subqueries.
+
+-- modifier_options → modifier_groups.restaurant_id
+DROP POLICY IF EXISTS "Allow all on modifier_options" ON modifier_options;
+DROP POLICY IF EXISTS "tenant_isolation"              ON modifier_options;
+CREATE POLICY "tenant_isolation" ON modifier_options
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM modifier_groups g
+      WHERE g.id = modifier_options.group_id
+        AND (
+          g.restaurant_id = current_setting('app.current_restaurant_id', true)::uuid
+          OR current_setting('app.current_restaurant_id', true) IS NULL
+          OR current_setting('app.current_restaurant_id', true) = ''
+        )
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM modifier_groups g
+      WHERE g.id = modifier_options.group_id
+        AND (
+          g.restaurant_id = current_setting('app.current_restaurant_id', true)::uuid
+          OR current_setting('app.current_restaurant_id', true) IS NULL
+          OR current_setting('app.current_restaurant_id', true) = ''
+        )
+    )
+  );
+
+-- product_modifier_groups → menu_items.restaurant_id
+DROP POLICY IF EXISTS "Allow all on product_modifier_groups" ON product_modifier_groups;
+DROP POLICY IF EXISTS "tenant_isolation"                     ON product_modifier_groups;
+CREATE POLICY "tenant_isolation" ON product_modifier_groups
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM menu_items m
+      WHERE m.id = product_modifier_groups.menu_item_id
+        AND (
+          m.restaurant_id = current_setting('app.current_restaurant_id', true)::uuid
+          OR current_setting('app.current_restaurant_id', true) IS NULL
+          OR current_setting('app.current_restaurant_id', true) = ''
+        )
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM menu_items m
+      WHERE m.id = product_modifier_groups.menu_item_id
+        AND (
+          m.restaurant_id = current_setting('app.current_restaurant_id', true)::uuid
+          OR current_setting('app.current_restaurant_id', true) IS NULL
+          OR current_setting('app.current_restaurant_id', true) = ''
+        )
+    )
+  );
+
+-- order_item_modifiers → order_items.restaurant_id
+DROP POLICY IF EXISTS "Allow all on order_item_modifiers" ON order_item_modifiers;
+DROP POLICY IF EXISTS "tenant_isolation"                  ON order_item_modifiers;
+CREATE POLICY "tenant_isolation" ON order_item_modifiers
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM order_items oi
+      WHERE oi.id = order_item_modifiers.order_item_id
+        AND (
+          oi.restaurant_id = current_setting('app.current_restaurant_id', true)::uuid
+          OR current_setting('app.current_restaurant_id', true) IS NULL
+          OR current_setting('app.current_restaurant_id', true) = ''
+        )
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM order_items oi
+      WHERE oi.id = order_item_modifiers.order_item_id
+        AND (
+          oi.restaurant_id = current_setting('app.current_restaurant_id', true)::uuid
+          OR current_setting('app.current_restaurant_id', true) IS NULL
+          OR current_setting('app.current_restaurant_id', true) = ''
+        )
+    )
+  );
 
 -- restaurants table — super_admin can see all; restoran_admin only theirs
 DROP POLICY IF EXISTS "Allow all on restaurants" ON restaurants;
