@@ -27,10 +27,9 @@ export const supabase: SupabaseClient = supabaseConfigured
       global: {
         fetch: (input, init = {}) => {
           if (_sessionToken) {
-            init.headers = {
-              ...init.headers,
-              'x-session-token': _sessionToken,
-            };
+            const headers = new Headers(init.headers);
+            headers.set('x-session-token', _sessionToken);
+            return fetch(input, { ...init, headers });
           }
           return fetch(input, init);
         },
