@@ -369,10 +369,10 @@ export default function PrinterManagement() {
               {agents.length > 0 && (
                 <div>
                   <label className="text-sm font-medium">Agent</label>
-                  <Select value={form.agentId} onValueChange={v => setForm(f => ({ ...f, agentId: v }))}>
+                  <Select value={form.agentId || '__none__'} onValueChange={v => setForm(f => ({ ...f, agentId: v === '__none__' ? '' : v }))}>
                     <SelectTrigger><SelectValue placeholder="Seçin (opsiyonel)" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">— Yok —</SelectItem>
+                      <SelectItem value="__none__">— Yok —</SelectItem>
                       {agents.map(a => (
                         <SelectItem key={a.id} value={a.id}>
                           {a.hostname ?? a.id.slice(0, 8)} ({a.tokenHint})
@@ -461,14 +461,14 @@ export default function PrinterManagement() {
               <div key={cat.id} className="flex items-center gap-3">
                 <span className="w-40 truncate text-sm font-medium">{cat.name}</span>
                 <Select
-                  value={categoryRouting[cat.id] ?? ''}
-                  onValueChange={v => handleSetRoute(cat.id, v)}
+                  value={categoryRouting[cat.id] || '__default__'}
+                  onValueChange={v => handleSetRoute(cat.id, v === '__default__' ? '' : v)}
                 >
                   <SelectTrigger className="w-52">
                     <SelectValue placeholder="Varsayılan yazıcı" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">— Varsayılan —</SelectItem>
+                    <SelectItem value="__default__">— Varsayılan —</SelectItem>
                     {kitchenPrinters.map(p => (
                       <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                     ))}
