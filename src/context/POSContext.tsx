@@ -209,10 +209,14 @@ export function POSProvider({ restaurantId, staffId, children }: POSProviderProp
 
   const updatePrinterConfig = useCallback(async (config: PrinterSettings): Promise<boolean> => {
     setPrinterConfig(config);
-    const { error } = await supabase
-      .from('restaurants')
-      .update({ settings: { printerConfig: config } })
-      .eq('id', restaurantId);
+    // Use update_settings_field RPC to do a safe partial JSONB merge.
+    // A direct .update({ settings: { printerConfig } }) would replace the
+    // entire settings column and wipe all other keys stored there.
+    const { error } = await supabase.rpc('update_settings_field', {
+      p_restaurant_id: restaurantId,
+      p_key: 'printerConfig',
+      p_value: config as unknown as Record<string, unknown>,
+    });
     if (error) {
       console.error('[POSContext] Failed to save printer config:', error.message);
       return false;
