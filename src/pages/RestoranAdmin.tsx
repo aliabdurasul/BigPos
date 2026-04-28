@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import AdminDashboard from '@/components/AdminDashboard';
 import PrinterManagement from '@/components/PrinterManagement';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 type Tab = 'raporlar' | 'menu' | 'kategori' | 'modifierler' | 'masa' | 'personel' | 'katlar' | 'yazicilar';
 
@@ -461,7 +462,11 @@ export default function RestoranAdmin() {
             </div>
           )}
 
-          {activeTab === 'yazicilar' && <PrinterManagement />}
+          {activeTab === 'yazicilar' && (
+            <ErrorBoundary>
+              <PrinterManagement />
+            </ErrorBoundary>
+          )}
         </div>
       </div>
 

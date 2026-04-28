@@ -32,12 +32,22 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
             <p className="mb-6 opacity-80">
               Oturum kilitlenmesi veya veri erişim hatası oluştu. Lütfen sayfayı yenileyin.
             </p>
-            <button 
-              onClick={() => window.location.reload()} 
+            <button
+              onClick={() => window.location.reload()}
               className="px-6 py-2 bg-primary text-primary-foreground font-medium rounded-md hover:opacity-90 transition-opacity"
             >
               Yeniden Başlat
             </button>
+            {this.state.error && (
+              <details className="mt-6 text-left text-xs opacity-60 break-all">
+                <summary className="cursor-pointer font-medium mb-1">Hata detayı</summary>
+                <pre className="bg-black/10 rounded p-2 overflow-x-auto whitespace-pre-wrap">
+                  {this.state.error.message}
+                  {'\n\n'}
+                  {this.state.error.stack}
+                </pre>
+              </details>
+            )}
           </div>
         </div>
       );

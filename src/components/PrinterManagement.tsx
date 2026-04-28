@@ -38,7 +38,7 @@ function StatusBadge({ status }: { status: PrinterStatus }) {
     error:   { label: 'Hata',       variant: 'destructive', icon: <XCircle className="w-3 h-3" /> },
     unknown: { label: 'Bilinmiyor', variant: 'outline',     icon: <Clock className="w-3 h-3" /> },
   };
-  const { label, variant, icon } = map[status];
+  const { label, variant, icon } = map[status] ?? { label: status || 'Bilinmiyor', variant: 'outline' as const, icon: <Clock className="w-3 h-3" /> };
   return (
     <Badge variant={variant} className="gap-1 text-xs">
       {icon}{label}
@@ -98,22 +98,27 @@ export default function PrinterManagement() {
 
   useEffect(() => {
     if (!restaurantId) return;
-    const channel = supabase
-      .channel(`printers:${restaurantId}`)
-      .on('postgres_changes', {
-        event: '*', schema: 'public', table: 'printers',
-        filter: `restaurant_id=eq.${restaurantId}`,
-      }, (payload) => {
-        if (payload.eventType === 'UPDATE') {
-          setPrinters(prev => prev.map(p =>
-            p.id === (payload.new as { id: string }).id ? { ...p, ...mapPrinter(payload.new) } : p
-          ));
-        } else {
-          load();
-        }
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      channel = supabase
+        .channel(`printers:${restaurantId}`)
+        .on('postgres_changes', {
+          event: '*', schema: 'public', table: 'printers',
+          filter: `restaurant_id=eq.${restaurantId}`,
+        }, (payload) => {
+          if (payload.eventType === 'UPDATE') {
+            setPrinters(prev => prev.map(p =>
+              p.id === (payload.new as { id: string }).id ? { ...p, ...mapPrinter(payload.new) } : p
+            ));
+          } else {
+            load();
+          }
+        })
+        .subscribe();
+    } catch (err) {
+      console.error('[PrinterManagement] Realtime subscription error:', err);
+    }
+    return () => { if (channel) supabase.removeChannel(channel); };
   }, [restaurantId, load]);
 
   // ─── CRUD ─────────────────────────────────────
@@ -210,7 +215,7 @@ export default function PrinterManagement() {
   // ─── Receipt settings ────────────────────────
 
   const [draftReceipt, setDraftReceipt] = useState<ReceiptSettings>(
-    printerConfig?.receiptSettings ?? DEFAULT_RECEIPT_SETTINGS
+    { ...DEFAULT_RECEIPT_SETTINGS, ...(printerConfig?.receiptSettings ?? {}) }
   );
   const [receiptDirty, setReceiptDirty] = useState(false);
   const [savingReceipt, setSavingReceipt] = useState(false);
