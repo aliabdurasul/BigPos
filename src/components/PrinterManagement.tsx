@@ -13,7 +13,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { usePOS } from '@/context/POSContext';
-import { supabase } from '@/lib/supabase';
+import { supabase, getSessionToken } from '@/lib/supabase';
 import { testPrint } from '@/lib/printer';
 import { setCategoryRoute, removeCategoryRoute } from '@/lib/qz-tray';
 import type { DbPrinter, RestaurantAgent, PrinterStationType, PrinterStatus, ReceiptSettings } from '@/types/pos';
@@ -250,32 +250,28 @@ export default function PrinterManagement() {
 
   const generateInstallToken = async () => {
     if (!restaurantId) return;
-    // Generate a random 32-byte token
-    const raw = Array.from(crypto.getRandomValues(new Uint8Array(32)))
-      .map(b => b.toString(16).padStart(2, '0')).join('');
 
-    // Hash it
-    const msgBuf = new TextEncoder().encode(raw);
-    const hashBuf = await crypto.subtle.digest('SHA-256', msgBuf);
-    const hash = Array.from(new Uint8Array(hashBuf))
-      .map(b => b.toString(16).padStart(2, '0')).join('');
+    const sessionToken = getSessionToken();
+    if (!sessionToken) {
+      toast.error('Oturum bulunamadı — lütfen tekrar giriş yapın');
+      return;
+    }
 
-    const { error } = await supabase.from('agent_install_tokens').insert({
-      restaurant_id: restaurantId,
-      token_hash:    hash,
-      token_hint:    raw.slice(-6),
+    const { data, error } = await supabase.functions.invoke('create-install-token', {
+      headers: { 'x-session-token': sessionToken },
     });
 
-    if (error) {
-      toast.error('Token oluşturulamadı: ' + error.message);
-    } else {
-      // Show the raw token once — it won't be recoverable after this
-      navigator.clipboard?.writeText(raw).catch(() => { /* ignore */ });
-      toast.success(
-        `Kurulum token'ı oluşturuldu ve panoya kopyalandı:\n${raw.slice(0, 16)}...`,
-        { duration: 10_000 }
-      );
+    if (error || data?.error) {
+      toast.error('Token oluşturulamadı: ' + (data?.error ?? error?.message));
+      return;
     }
+
+    const raw = data.token as string;
+    navigator.clipboard?.writeText(raw).catch(() => { /* ignore */ });
+    toast.success(
+      `Kurulum token'ı oluşturuldu ve panoya kopyalandı:\n${raw.slice(0, 16)}...`,
+      { duration: 10_000 },
+    );
   };
 
   // ─── Render ───────────────────────────────────
