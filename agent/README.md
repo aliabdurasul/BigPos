@@ -30,10 +30,19 @@ In the BigPOS admin panel:
 
 Then run the provisioning script:
 ```bash
-node dist/provision.js --token <INSTALL_TOKEN> --url https://<your-project>.supabase.co
+node dist/provision.js \
+  --token      <INSTALL_TOKEN> \
+  --url        https://<your-project>.supabase.co \
+  --service-key <SERVICE_ROLE_KEY>
 ```
 
-This creates `~/.bigpos-agent/keystore.json` with the agent's credentials.
+- **`--token`** — the one-time install token copied from the admin panel (expires in 24h)
+- **`--url`** — your Supabase project URL (Supabase Dashboard → Settings → API → Project URL)
+- **`--service-key`** — the `service_role` secret key (Supabase Dashboard → Settings → API → Project API keys)
+
+This creates `~/.bigpos-agent/keystore.json` with the agent's permanent credentials.
+
+> ⚠️ Keep the `service_role` key secret — treat it like a DB password. It grants full database access.
 
 ### 3. Start the agent
 ```bash
