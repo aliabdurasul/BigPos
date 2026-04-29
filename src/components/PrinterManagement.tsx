@@ -55,6 +55,7 @@ export default function PrinterManagement() {
   const [categoryRouting, setCategoryRoutingState] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [globalTesting, setGlobalTesting] = useState(false);
 
   // Add/edit form
   const [showAddForm, setShowAddForm] = useState(false);
@@ -222,6 +223,27 @@ export default function PrinterManagement() {
     }
   };
 
+  const handleGlobalTestPrint = async () => {
+    const activePrinter = printers.find(p => p.active);
+    if (!activePrinter) {
+      toast.error('Aktif yazıcı bulunamadı');
+      return;
+    }
+    setGlobalTesting(true);
+    try {
+      const ok = await bridgeTestPrint(activePrinter.ipAddress, activePrinter.port);
+      if (ok) {
+        toast.success('🧾 Test Print OK — Receipt printed');
+      } else {
+        toast.error('Test Print Failed');
+      }
+    } catch {
+      toast.error('Test Print Failed');
+    } finally {
+      setTimeout(() => setGlobalTesting(false), 2000);
+    }
+  };
+
   // ─── Receipt settings ────────────────────────
 
   const [draftReceipt, setDraftReceipt] = useState<ReceiptSettings>(
@@ -307,6 +329,12 @@ export default function PrinterManagement() {
           Yazıcı Yönetimi
         </h2>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleGlobalTestPrint} disabled={globalTesting}>
+            {globalTesting
+              ? <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+              : <Printer className="w-4 h-4 mr-1" />}
+            Test Print
+          </Button>
           <Button variant="outline" size="sm" onClick={load}>
             <RefreshCw className="w-4 h-4 mr-1" />
             Yenile
