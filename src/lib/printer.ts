@@ -7,7 +7,7 @@
  * No ESC/POS bytes are produced here anymore — the agent owns that responsibility.
  */
 
-import { enqueuePrintJob, buildFingerprint, routeItemsByPrinter } from './print-manager';
+import { enqueuePrintJob, buildFingerprint, routeItemsByPrinter, BRIDGE_URL } from './print-manager';
 import { OrderItem, Payment, ReceiptSettings, PrinterSettings, DEFAULT_RECEIPT_SETTINGS, DEFAULT_PRINTER_SETTINGS } from '@/types/pos';
 
 // ─── Helpers ───────────────────────────────────
@@ -206,7 +206,7 @@ export async function printAdisyon(data: AdisyonPrintData, config?: PrinterSetti
   });
 }
 
-// ─── Test Print ────────────────────────────────
+// ─── Test Print (queue-based) ─────────────────
 
 export async function testPrint(printerId: string, restaurantId: string): Promise<void> {
   const fp = buildFingerprint('test', `${printerId}_${Date.now()}`);
@@ -217,6 +217,39 @@ export async function testPrint(printerId: string, restaurantId: string): Promis
     payload:     { timestamp: new Date().toISOString() },
     fingerprint: fp,
   });
+}
+
+// ─── Test Print (direct bridge) ───────────────
+
+/**
+ * Send a test print directly to the local bridge server (server.js).
+ * Bypasses the Supabase queue — useful for verifying bridge connectivity.
+ * Returns true on success, false on failure.
+ */
+export async function bridgeTestPrint(ipAddress: string, port: number): Promise<boolean> {
+  try {
+    const res = await fetch(`${BRIDGE_URL}/print`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ip:    ipAddress,
+        port:  port,
+        order: {
+          id:    'TEST-001',
+          items: [
+            { name: 'Test Kebab', qty: 1 },
+            { name: 'Ayran',      qty: 2 },
+          ],
+          total: 250,
+        },
+      }),
+    });
+
+    const data = await res.json();
+    return data.success === true;
+  } catch {
+    return false;
+  }
 }
 
 // ─── End of Day Report ─────────────────────────

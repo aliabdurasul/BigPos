@@ -14,7 +14,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { usePOS } from '@/context/POSContext';
 import { supabase, getSessionToken } from '@/lib/supabase';
-import { testPrint } from '@/lib/printer';
+import { testPrint, bridgeTestPrint } from '@/lib/printer';
 import { setCategoryRoute, removeCategoryRoute } from '@/lib/qz-tray';
 import type { DbPrinter, RestaurantAgent, PrinterStationType, PrinterStatus, ReceiptSettings } from '@/types/pos';
 import { DEFAULT_RECEIPT_SETTINGS } from '@/types/pos';
@@ -208,8 +208,18 @@ export default function PrinterManagement() {
   const handleTestPrint = async (p: DbPrinter) => {
     if (!restaurantId) return;
     setTestingId(p.id);
-    await testPrint(p.id, restaurantId);
-    setTimeout(() => setTestingId(null), 2000);
+    try {
+      const ok = await bridgeTestPrint(p.ipAddress, p.port);
+      if (ok) {
+        toast.success('Test Print OK — Receipt printed');
+      } else {
+        toast.error('Print Failed');
+      }
+    } catch {
+      toast.error('Print Failed');
+    } finally {
+      setTimeout(() => setTestingId(null), 2000);
+    }
   };
 
   // ─── Receipt settings ────────────────────────

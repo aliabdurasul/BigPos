@@ -12,6 +12,11 @@
 import { supabase } from './supabase';
 import type { DbPrintJob } from '@/types/pos';
 
+// ─── Bridge URL ────────────────────────────────
+
+/** Local print bridge URL. Replace with your Cloudflare tunnel URL when remote. */
+export const BRIDGE_URL = 'https://corresponding-difference-molecules-february.trycloudflare.com';
+
 // ─── Types ─────────────────────────────────────
 
 /** Lightweight job record kept for UI display only */
